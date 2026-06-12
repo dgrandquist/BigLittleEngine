@@ -101,24 +101,6 @@ BigLittleEngine/
 3. **Iterative-first**: Prioritize fast feedback loops over perfect architecture
 4. **Observable**: Logging and metrics baked in from the start
 
-## Contributing
-
-We welcome contributions at all levels:
-
-- **Throwaway prototypes**: Have an idea for a simple game? Create a new example in `examples/` and iterate on it. These are intentionally disposable.
-- **Engine improvements**: Performance optimizations, new systems, or API improvements to core engine code
-- **Platform code**: Mac client features, web frontend improvements, backend services
-- **Documentation**: Guides, tutorials, architecture docs
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines (coming soon).
-
-### Starting a New Game Prototype
-
-1. Create a new directory in `examples/`
-2. Use the engine as a dependency
-3. Iterate quickly—this is your sandbox
-4. When it stops being fun, move on or refactor into something new
-
 ## Roadmap & Status
 
 ### Phase 1: Foundation (Current)
