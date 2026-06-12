@@ -22,7 +22,6 @@ export default class ExplorationScene extends Phaser.Scene {
 
   private moveTimer = 0;
   private lastInput: string | null = null;
-  private canMove = true;
 
   private entities: Entity[] = [];
   private entityGraphics: Phaser.GameObjects.Graphics[] = [];
@@ -107,22 +106,20 @@ export default class ExplorationScene extends Phaser.Scene {
     this.moveTimer += deltaSeconds;
 
     // Execute move when ready
-    if (this.canMove && this.moveTimer >= this.moveInterval && moveDirection) {
+    if (this.moveTimer >= this.moveInterval && moveDirection) {
       const newX = Math.max(0, Math.min(this.gridWidth - 1, this.playerGridX + moveDirection.dx));
       const newY = Math.max(0, Math.min(this.gridHeight - 1, this.playerGridY + moveDirection.dy));
 
-      this.animatePlayerMove(newX, newY);
-      this.playerGridX = newX;
-      this.playerGridY = newY;
+      // Check if square is occupied by an entity
+      const isOccupied = this.entities.some(e => e.x === newX && e.y === newY);
+
+      if (!isOccupied) {
+        this.animatePlayerMove(newX, newY);
+        this.playerGridX = newX;
+        this.playerGridY = newY;
+      }
 
       this.moveTimer = 0;
-      this.canMove = false;
-      this.tweens.add({
-        targets: this,
-        canMove: true,
-        delay: this.moveInterval * 1000,
-        duration: 0,
-      });
     }
 
     // Update HUD

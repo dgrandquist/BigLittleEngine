@@ -68,12 +68,6 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: null
         });
-        Object.defineProperty(this, "canMove", {
-            enumerable: true,
-            configurable: true,
-            writable: true,
-            value: true
-        });
         Object.defineProperty(this, "entities", {
             enumerable: true,
             configurable: true,
@@ -184,20 +178,17 @@ export default class ExplorationScene extends Phaser.Scene {
         // Update move timer
         this.moveTimer += deltaSeconds;
         // Execute move when ready
-        if (this.canMove && this.moveTimer >= this.moveInterval && moveDirection) {
+        if (this.moveTimer >= this.moveInterval && moveDirection) {
             const newX = Math.max(0, Math.min(this.gridWidth - 1, this.playerGridX + moveDirection.dx));
             const newY = Math.max(0, Math.min(this.gridHeight - 1, this.playerGridY + moveDirection.dy));
-            this.animatePlayerMove(newX, newY);
-            this.playerGridX = newX;
-            this.playerGridY = newY;
+            // Check if square is occupied by an entity
+            const isOccupied = this.entities.some(e => e.x === newX && e.y === newY);
+            if (!isOccupied) {
+                this.animatePlayerMove(newX, newY);
+                this.playerGridX = newX;
+                this.playerGridY = newY;
+            }
             this.moveTimer = 0;
-            this.canMove = false;
-            this.tweens.add({
-                targets: this,
-                canMove: true,
-                delay: this.moveInterval * 1000,
-                duration: 0,
-            });
         }
         // Update HUD
         const timeUntilNext = Math.max(0, this.moveInterval - this.moveTimer);
