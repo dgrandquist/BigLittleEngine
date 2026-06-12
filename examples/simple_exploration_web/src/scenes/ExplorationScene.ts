@@ -17,7 +17,7 @@ export default class ExplorationScene extends Phaser.Scene {
   private gridHeight = 10;
   private cellSize = 40;
   private padding = 20;
-  private moveInterval = 1.0;
+  private moveInterval = 0.25;
   private playerColor = 0x00ff00;
   private blendDuration = 2.0;
 
