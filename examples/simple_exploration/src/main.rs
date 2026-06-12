@@ -6,13 +6,19 @@ const CELL_SIZE: f32 = 40.0;
 const GRID_LINE_COLOR: Color = GRAY;
 const PLAYER_COLOR: Color = GREEN;
 const PADDING: f32 = 20.0;
+const MOVE_INTERVAL: f32 = 1.0;
 
 struct GameState {
-    player_x: usize,
-    player_y: usize,
+    player_grid_x: usize,
+    player_grid_y: usize,
+    player_visual_x: f32,
+    player_visual_y: f32,
     move_timer: f32,
-    move_interval: f32,
-    pending_move: Option<(i32, i32)>,
+    current_move: Option<(i32, i32)>,
+    last_input: Option<&'static str>,
+    frame_count: usize,
+    fps_timer: f32,
+    current_fps: f32,
     entities: Vec<Entity>,
 }
 
@@ -26,7 +32,7 @@ struct Entity {
 
 impl GameState {
     fn new() -> Self {
-        let mut entities = vec![
+        let entities = vec![
             Entity {
                 x: 1,
                 y: 1,
@@ -59,41 +65,84 @@ impl GameState {
             },
         ];
 
+        let start_x = GRID_WIDTH / 2;
+        let start_y = GRID_HEIGHT / 2;
+
         GameState {
-            player_x: GRID_WIDTH / 2,
-            player_y: GRID_HEIGHT / 2,
+            player_grid_x: start_x,
+            player_grid_y: start_y,
+            player_visual_x: start_x as f32,
+            player_visual_y: start_y as f32,
             move_timer: 0.0,
-            move_interval: 1.0,
-            pending_move: None,
+            current_move: None,
+            last_input: None,
+            frame_count: 0,
+            fps_timer: 0.0,
+            current_fps: 0.0,
             entities,
         }
     }
 
     fn update(&mut self) {
-        // Capture input
-        if is_key_pressed(KeyCode::Up) {
-            self.pending_move = Some((0, -1));
-        } else if is_key_pressed(KeyCode::Down) {
-            self.pending_move = Some((0, 1));
-        } else if is_key_pressed(KeyCode::Left) {
-            self.pending_move = Some((-1, 0));
-        } else if is_key_pressed(KeyCode::Right) {
-            self.pending_move = Some((1, 0));
+        let frame_time = get_frame_time();
+
+        // Update FPS counter
+        self.frame_count += 1;
+        self.fps_timer += frame_time;
+        if self.fps_timer >= 0.1 {
+            self.current_fps = self.frame_count as f32 / self.fps_timer;
+            self.frame_count = 0;
+            self.fps_timer = 0.0;
+        }
+
+        // Check for held keys (continuous input)
+        let mut next_move = None;
+        if is_key_down(KeyCode::Up) {
+            next_move = Some((0, -1));
+            self.last_input = Some("UP");
+        } else if is_key_down(KeyCode::Down) {
+            next_move = Some((0, 1));
+            self.last_input = Some("DOWN");
+        } else if is_key_down(KeyCode::Left) {
+            next_move = Some((-1, 0));
+            self.last_input = Some("LEFT");
+        } else if is_key_down(KeyCode::Right) {
+            next_move = Some((1, 0));
+            self.last_input = Some("RIGHT");
+        } else {
+            self.last_input = None;
         }
 
         // Update timer
-        self.move_timer += get_frame_time();
+        self.move_timer += frame_time;
 
         // Execute movement when interval passes
-        if self.move_timer >= self.move_interval && self.pending_move.is_some() {
-            if let Some((dx, dy)) = self.pending_move.take() {
-                let new_x = (self.player_x as i32 + dx).max(0).min(GRID_WIDTH as i32 - 1) as usize;
-                let new_y = (self.player_y as i32 + dy).max(0).min(GRID_HEIGHT as i32 - 1) as usize;
+        if self.move_timer >= MOVE_INTERVAL {
+            if let Some((dx, dy)) = next_move {
+                let new_x = (self.player_grid_x as i32 + dx)
+                    .max(0)
+                    .min(GRID_WIDTH as i32 - 1) as usize;
+                let new_y = (self.player_grid_y as i32 + dy)
+                    .max(0)
+                    .min(GRID_HEIGHT as i32 - 1) as usize;
 
-                self.player_x = new_x;
-                self.player_y = new_y;
+                self.player_grid_x = new_x;
+                self.player_grid_y = new_y;
+                self.current_move = Some((dx, dy));
             }
             self.move_timer = 0.0;
+        }
+
+        // Animate player position smoothly between cells
+        let progress = self.move_timer / MOVE_INTERVAL;
+        if let Some((dx, dy)) = self.current_move {
+            let start_x = (self.player_grid_x as f32) - (dx as f32) * progress;
+            let start_y = (self.player_grid_y as f32) - (dy as f32) * progress;
+            self.player_visual_x = start_x;
+            self.player_visual_y = start_y;
+        } else {
+            self.player_visual_x = self.player_grid_x as f32;
+            self.player_visual_y = self.player_grid_y as f32;
         }
     }
 
@@ -132,9 +181,9 @@ impl GameState {
             draw_rectangle(x, y, CELL_SIZE - 4.0, CELL_SIZE - 4.0, entity.color);
         }
 
-        // Draw player (larger, with outline)
-        let player_x = PADDING + self.player_x as f32 * CELL_SIZE + 2.0;
-        let player_y = PADDING + self.player_y as f32 * CELL_SIZE + 2.0;
+        // Draw player (animated position)
+        let player_x = PADDING + self.player_visual_x * CELL_SIZE + 2.0;
+        let player_y = PADDING + self.player_visual_y * CELL_SIZE + 2.0;
         let size = CELL_SIZE - 4.0;
 
         // Outer border (white outline)
@@ -145,17 +194,15 @@ impl GameState {
         // Draw text label
         draw_text("YOU", player_x + 5.0, player_y + 25.0, 16.0, WHITE);
 
-        // Draw info text
-        draw_text(
-            &format!(
-                "Position: ({}, {}) | Move interval: {}s | Use arrow keys to move",
-                self.player_x, self.player_y, self.move_interval
-            ),
-            10.0,
-            20.0,
-            16.0,
-            WHITE,
-        );
+        // Draw HUD
+        let time_until_next = MOVE_INTERVAL - self.move_timer;
+        let input_str = self.last_input.unwrap_or("none");
+
+        draw_text(&format!("FPS: {:.0}", self.current_fps), 10.0, 20.0, 16.0, WHITE);
+        draw_text(&format!("Position: ({}, {})", self.player_grid_x, self.player_grid_y), 10.0, 40.0, 16.0, WHITE);
+        draw_text(&format!("Next move in: {:.2}s", time_until_next), 10.0, 60.0, 16.0, WHITE);
+        draw_text(&format!("Input: {}", input_str), 10.0, 80.0, 16.0, WHITE);
+        draw_text("Arrow keys to move (1 cell/sec)", 10.0, 100.0, 14.0, GRAY);
     }
 }
 
