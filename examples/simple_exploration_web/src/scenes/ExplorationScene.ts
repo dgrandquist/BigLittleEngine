@@ -18,6 +18,7 @@ export default class ExplorationScene extends Phaser.Scene {
   private playerGridX = 5;
   private playerGridY = 5;
   private playerGraphics?: Phaser.GameObjects.Graphics;
+  private playerLabel?: Phaser.GameObjects.Text;
   private playerTween?: Phaser.Tweens.Tween;
 
   private moveTimer = 0;
@@ -61,6 +62,8 @@ export default class ExplorationScene extends Phaser.Scene {
 
     // Draw player
     this.playerGraphics = this.add.graphics();
+    this.playerLabel = this.add.text(0, 0, 'YOU', { font: 'bold 14px Arial', color: '#ffffff' });
+    this.playerLabel.setDepth(10);
     this.drawPlayer();
 
     // Create HUD text
@@ -162,7 +165,7 @@ export default class ExplorationScene extends Phaser.Scene {
   }
 
   private drawPlayer() {
-    if (!this.playerGraphics) return;
+    if (!this.playerGraphics || !this.playerLabel) return;
 
     this.playerGraphics.clear();
 
@@ -178,10 +181,8 @@ export default class ExplorationScene extends Phaser.Scene {
     this.playerGraphics.fillStyle(0x00ff00);
     this.playerGraphics.fillRect(x + 2, y + 2, size - 4, size - 4);
 
-    // Label
-    this.playerGraphics.fillStyle(0xffffff);
-    const textObj = this.add.text(x + 8, y + 15, 'YOU', { font: 'bold 14px Arial', color: '#ffffff' });
-    textObj.setDepth(10);
+    // Update label position
+    this.playerLabel.setPosition(x + 8, y + 15);
   }
 
   private animatePlayerMove(newX: number, newY: number) {

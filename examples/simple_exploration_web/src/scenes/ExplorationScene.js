@@ -50,6 +50,12 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: void 0
         });
+        Object.defineProperty(this, "playerLabel", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         Object.defineProperty(this, "playerTween", {
             enumerable: true,
             configurable: true,
@@ -137,6 +143,8 @@ export default class ExplorationScene extends Phaser.Scene {
         });
         // Draw player
         this.playerGraphics = this.add.graphics();
+        this.playerLabel = this.add.text(0, 0, 'YOU', { font: 'bold 14px Arial', color: '#ffffff' });
+        this.playerLabel.setDepth(10);
         this.drawPlayer();
         // Create HUD text
         this.hudText = this.add.text(10, 10, '', { font: '14px Arial', color: '#ffffff' });
@@ -223,7 +231,7 @@ export default class ExplorationScene extends Phaser.Scene {
         graphics.fillRect(x, y, size, size);
     }
     drawPlayer() {
-        if (!this.playerGraphics)
+        if (!this.playerGraphics || !this.playerLabel)
             return;
         this.playerGraphics.clear();
         const x = this.padding + this.playerGridX * this.cellSize;
@@ -235,10 +243,8 @@ export default class ExplorationScene extends Phaser.Scene {
         // Fill
         this.playerGraphics.fillStyle(0x00ff00);
         this.playerGraphics.fillRect(x + 2, y + 2, size - 4, size - 4);
-        // Label
-        this.playerGraphics.fillStyle(0xffffff);
-        const textObj = this.add.text(x + 8, y + 15, 'YOU', { font: 'bold 14px Arial', color: '#ffffff' });
-        textObj.setDepth(10);
+        // Update label position
+        this.playerLabel.setPosition(x + 8, y + 15);
     }
     animatePlayerMove(newX, newY) {
         if (this.playerTween) {
