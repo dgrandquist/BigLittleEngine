@@ -4,8 +4,8 @@ import ExplorationScene from './scenes/ExplorationScene';
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game',
-  width: 600,
-  height: 650,
+  width: 450,
+  height: 500,
   backgroundColor: '#000000',
   physics: {
     default: 'arcade',

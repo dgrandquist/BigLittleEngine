@@ -6,31 +6,31 @@ export default class ExplorationScene extends Phaser.Scene {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 10
+            value: 20
         });
         Object.defineProperty(this, "gridHeight", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 10
+            value: 20
         });
         Object.defineProperty(this, "cellSize", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 40
+            value: 20
         });
         Object.defineProperty(this, "padding", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 20
+            value: 10
         });
         Object.defineProperty(this, "moveInterval", {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 1.0
+            value: 0.25
         });
         Object.defineProperty(this, "playerColor", {
             enumerable: true,
@@ -148,23 +148,26 @@ export default class ExplorationScene extends Phaser.Scene {
         });
     }
     create() {
-        // Initialize entities
+        // Initialize entities (spread across larger 20x20 grid)
         this.entities = [
-            { x: 1, y: 1, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', blendProgress: -1, blendStartColor: 0x0000ff, blendDuration: this.blendDuration },
-            { x: 8, y: 2, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', blendProgress: -1, blendStartColor: 0xffff00, blendDuration: this.blendDuration },
-            { x: 3, y: 7, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', blendProgress: -1, blendStartColor: 0xff0000, blendDuration: this.blendDuration },
-            { x: 7, y: 8, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', blendProgress: -1, blendStartColor: 0x800080, blendDuration: this.blendDuration },
-            { x: 5, y: 2, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', blendProgress: -1, blendStartColor: 0xff8000, blendDuration: this.blendDuration },
+            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0000ff, blendTargetColor: 0x0000ff, blendDuration: this.blendDuration, moveTimer: 0 },
+            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0xffff00, blendTargetColor: 0xffff00, blendDuration: this.blendDuration, moveTimer: 0 },
+            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xff0000, blendTargetColor: 0xff0000, blendDuration: this.blendDuration, moveTimer: 0 },
+            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x800080, blendTargetColor: 0x800080, blendDuration: this.blendDuration, moveTimer: 0 },
+            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0xff8000, blendTargetColor: 0xff8000, blendDuration: this.blendDuration, moveTimer: 0 },
         ];
         // Draw grid
         this.gridGraphics = this.add.graphics();
         this.drawGrid();
-        // Draw entities
+        // Draw entities and create labels
         this.entities.forEach((entity) => {
             const g = this.add.graphics();
             this.entityGraphics.push(g);
             entity.graphics = g;
             this.drawEntity(g, entity);
+            // Create need label
+            entity.label = this.add.text(0, 0, entity.need, { font: 'bold 9px Arial', color: '#ffffff' });
+            entity.label.setDepth(20);
         });
         // Draw player
         this.playerGraphics = this.add.graphics();
@@ -208,19 +211,39 @@ export default class ExplorationScene extends Phaser.Scene {
         else {
             this.lastInput = null;
         }
-        // Update entity blends
+        // Update entity movement
+        this.entities.forEach((entity) => {
+            entity.moveTimer += deltaSeconds;
+            if (entity.moveTimer >= this.moveInterval) {
+                const move = this.getBehaviorMove(entity);
+                if (move) {
+                    entity.x = move.x;
+                    entity.y = move.y;
+                    // Check entity-to-entity collisions (touching triggers blend)
+                    const otherEntity = this.entities.find(e => e !== entity && e.x === entity.x && e.y === entity.y);
+                    if (otherEntity) {
+                        this.blendEntityTowards(otherEntity, entity.currentColor);
+                    }
+                }
+                entity.moveTimer = 0;
+            }
+            // Smooth visual movement
+            entity.visualX = entity.x;
+            entity.visualY = entity.y;
+        });
+        // Update entity blends and redraw all entities
         this.entities.forEach((entity) => {
             if (entity.blendProgress >= 0 && entity.blendProgress < 1) {
                 entity.blendProgress += deltaSeconds / entity.blendDuration;
                 if (entity.blendProgress > 1) {
                     entity.blendProgress = 1;
                 }
-                // Update color based on blend progress
-                entity.currentColor = this.lerpColor(entity.blendStartColor, this.playerColor, entity.blendProgress);
-                // Redraw entity with new color
-                if (entity.graphics) {
-                    this.drawEntity(entity.graphics, entity);
-                }
+                // Update color based on blend progress toward target color
+                entity.currentColor = this.lerpColor(entity.blendStartColor, entity.blendTargetColor, entity.blendProgress);
+            }
+            // Redraw entity every frame (movement + blending)
+            if (entity.graphics) {
+                this.drawEntity(entity.graphics, entity);
             }
         });
         // Update move timer
@@ -271,12 +294,16 @@ export default class ExplorationScene extends Phaser.Scene {
         this.gridGraphics.strokePath();
     }
     drawEntity(graphics, entity) {
-        const x = this.padding + entity.x * this.cellSize + 2;
-        const y = this.padding + entity.y * this.cellSize + 2;
+        const x = this.padding + entity.visualX * this.cellSize + 2;
+        const y = this.padding + entity.visualY * this.cellSize + 2;
         const size = this.cellSize - 4;
         graphics.clear();
         graphics.fillStyle(entity.currentColor);
         graphics.fillRect(x, y, size, size);
+        // Update label position
+        if (entity.label) {
+            entity.label.setPosition(x + 2, y + 2);
+        }
     }
     drawPlayer() {
         if (!this.playerGraphics || !this.playerLabel)
@@ -324,9 +351,134 @@ export default class ExplorationScene extends Phaser.Scene {
         return (r << 16) | (g << 8) | b;
     }
     startEntityBlend(entity) {
+        // Blend toward player color (green)
+        this.blendEntityTowards(entity, this.playerColor);
+    }
+    blendEntityTowards(entity, targetColor) {
         // Save current color as blend start color
         entity.blendStartColor = entity.currentColor;
+        // Set the target color for blending
+        entity.blendTargetColor = targetColor;
         // Reset blend progress to start the animation
         entity.blendProgress = 0;
+    }
+    getBehaviorMove(entity) {
+        switch (entity.emotion) {
+            case 'sad':
+                return this.behaviorSad(entity);
+            case 'neutral':
+                return this.behaviorNeutral(entity);
+            case 'angry':
+                return this.behaviorAngry(entity);
+            case 'curious':
+                return this.behaviorCurious(entity);
+            case 'excited':
+                return this.behaviorExcited(entity);
+            default:
+                return null;
+        }
+    }
+    behaviorSad(entity) {
+        // Move away from nearest other entity
+        let nearestEntity = null;
+        let minDist = Infinity;
+        for (const other of this.entities) {
+            if (other === entity)
+                continue;
+            const dist = Math.abs(other.x - entity.x) + Math.abs(other.y - entity.y);
+            if (dist < minDist) {
+                minDist = dist;
+                nearestEntity = other;
+            }
+        }
+        if (!nearestEntity)
+            return { x: entity.x, y: entity.y };
+        // Move away from nearest
+        const dx = entity.x - nearestEntity.x;
+        const dy = entity.y - nearestEntity.y;
+        const newX = Math.max(0, Math.min(this.gridWidth - 1, entity.x + (dx > 0 ? 1 : -1)));
+        const newY = Math.max(0, Math.min(this.gridHeight - 1, entity.y + (dy > 0 ? 1 : -1)));
+        return { x: newX, y: newY };
+    }
+    behaviorNeutral(entity) {
+        // Random wandering
+        const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        const dir = dirs[Math.floor(Math.random() * dirs.length)];
+        const newX = Math.max(0, Math.min(this.gridWidth - 1, entity.x + dir[0]));
+        const newY = Math.max(0, Math.min(this.gridHeight - 1, entity.y + dir[1]));
+        return { x: newX, y: newY };
+    }
+    behaviorAngry(entity) {
+        // Move toward a random other entity
+        if (entity.targetX === undefined || entity.targetY === undefined || Math.random() < 0.3) {
+            const others = this.entities.filter(e => e !== entity);
+            if (others.length > 0) {
+                const target = others[Math.floor(Math.random() * others.length)];
+                entity.targetX = target.x;
+                entity.targetY = target.y;
+            }
+        }
+        if (entity.targetX === undefined || entity.targetY === undefined)
+            return { x: entity.x, y: entity.y };
+        const dx = entity.targetX - entity.x;
+        const dy = entity.targetY - entity.y;
+        const newX = entity.x + Math.sign(dx);
+        const newY = entity.y + Math.sign(dy);
+        return {
+            x: Math.max(0, Math.min(this.gridWidth - 1, newX)),
+            y: Math.max(0, Math.min(this.gridHeight - 1, newY)),
+        };
+    }
+    behaviorCurious(entity) {
+        // Move to different colors in sequence
+        if (entity.targetX === undefined || entity.targetY === undefined) {
+            const others = this.entities.filter(e => e !== entity);
+            if (others.length > 0) {
+                const target = others[Math.floor(Math.random() * others.length)];
+                entity.targetX = target.x;
+                entity.targetY = target.y;
+            }
+        }
+        if (entity.targetX === undefined || entity.targetY === undefined)
+            return { x: entity.x, y: entity.y };
+        // Check if reached target
+        if (entity.x === entity.targetX && entity.y === entity.targetY) {
+            entity.targetX = undefined;
+            entity.targetY = undefined;
+        }
+        const dx = (entity.targetX ?? entity.x) - entity.x;
+        const dy = (entity.targetY ?? entity.y) - entity.y;
+        const newX = entity.x + Math.sign(dx);
+        const newY = entity.y + Math.sign(dy);
+        return {
+            x: Math.max(0, Math.min(this.gridWidth - 1, newX)),
+            y: Math.max(0, Math.min(this.gridHeight - 1, newY)),
+        };
+    }
+    behaviorExcited(entity) {
+        // Visit all non-neutral entities
+        if (entity.targetX === undefined || entity.targetY === undefined) {
+            const others = this.entities.filter(e => e !== entity && e.emotion !== 'neutral');
+            if (others.length > 0) {
+                const target = others[Math.floor(Math.random() * others.length)];
+                entity.targetX = target.x;
+                entity.targetY = target.y;
+            }
+        }
+        if (entity.targetX === undefined || entity.targetY === undefined)
+            return { x: entity.x, y: entity.y };
+        // Check if reached target
+        if (entity.x === entity.targetX && entity.y === entity.targetY) {
+            entity.targetX = undefined;
+            entity.targetY = undefined;
+        }
+        const dx = (entity.targetX ?? entity.x) - entity.x;
+        const dy = (entity.targetY ?? entity.y) - entity.y;
+        const newX = entity.x + Math.sign(dx);
+        const newY = entity.y + Math.sign(dy);
+        return {
+            x: Math.max(0, Math.min(this.gridWidth - 1, newX)),
+            y: Math.max(0, Math.min(this.gridHeight - 1, newY)),
+        };
     }
 }
