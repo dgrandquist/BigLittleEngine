@@ -95,29 +95,29 @@ impl GameState {
             self.fps_timer = 0.0;
         }
 
-        // Check for held keys (continuous input)
-        let mut next_move = None;
-        if is_key_down(KeyCode::Up) {
-            next_move = Some((0, -1));
-            self.last_input = Some("UP");
-        } else if is_key_down(KeyCode::Down) {
-            next_move = Some((0, 1));
-            self.last_input = Some("DOWN");
-        } else if is_key_down(KeyCode::Left) {
-            next_move = Some((-1, 0));
-            self.last_input = Some("LEFT");
-        } else if is_key_down(KeyCode::Right) {
-            next_move = Some((1, 0));
-            self.last_input = Some("RIGHT");
-        } else {
-            self.last_input = None;
-        }
-
         // Update timer
         self.move_timer += frame_time;
 
-        // Execute movement when interval passes
+        // Only accept new input when NOT currently moving
+        let mut next_move = None;
         if self.move_timer >= MOVE_INTERVAL {
+            if is_key_down(KeyCode::Up) {
+                next_move = Some((0, -1));
+                self.last_input = Some("UP");
+            } else if is_key_down(KeyCode::Down) {
+                next_move = Some((0, 1));
+                self.last_input = Some("DOWN");
+            } else if is_key_down(KeyCode::Left) {
+                next_move = Some((-1, 0));
+                self.last_input = Some("LEFT");
+            } else if is_key_down(KeyCode::Right) {
+                next_move = Some((1, 0));
+                self.last_input = Some("RIGHT");
+            } else {
+                self.last_input = None;
+            }
+
+            // Start new movement
             if let Some((dx, dy)) = next_move {
                 let new_x = (self.player_grid_x as i32 + dx)
                     .max(0)
@@ -136,10 +136,12 @@ impl GameState {
         // Animate player position smoothly between cells
         let progress = self.move_timer / MOVE_INTERVAL;
         if let Some((dx, dy)) = self.current_move {
-            let start_x = (self.player_grid_x as f32) - (dx as f32) * progress;
-            let start_y = (self.player_grid_y as f32) - (dy as f32) * progress;
-            self.player_visual_x = start_x;
-            self.player_visual_y = start_y;
+            let prev_x = (self.player_grid_x as f32) - (dx as f32);
+            let prev_y = (self.player_grid_y as f32) - (dy as f32);
+            let next_x = self.player_grid_x as f32;
+            let next_y = self.player_grid_y as f32;
+            self.player_visual_x = prev_x + (next_x - prev_x) * progress;
+            self.player_visual_y = prev_y + (next_y - prev_y) * progress;
         } else {
             self.player_visual_x = self.player_grid_x as f32;
             self.player_visual_y = self.player_grid_y as f32;
