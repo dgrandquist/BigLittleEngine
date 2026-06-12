@@ -50,6 +50,37 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: 2.0
         });
+        Object.defineProperty(this, "stuckTimeLimit", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 30.0
+        });
+        Object.defineProperty(this, "deathDuration", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 1.0
+        });
+        Object.defineProperty(this, "deathTally", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: {
+                sad: 0,
+                neutral: 0,
+                angry: 0,
+                curious: 0,
+                excited: 0,
+                happy: 0,
+            }
+        });
+        Object.defineProperty(this, "tallyText", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: void 0
+        });
         Object.defineProperty(this, "playerGridX", {
             enumerable: true,
             configurable: true,
@@ -156,11 +187,11 @@ export default class ExplorationScene extends Phaser.Scene {
     create() {
         // Initialize entities (spread across larger 20x20 grid)
         this.entities = [
-            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0000ff, blendTargetColor: 0x0000ff, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
-            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0xffff00, blendTargetColor: 0xffff00, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
-            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xff0000, blendTargetColor: 0xff0000, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
-            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x800080, blendTargetColor: 0x800080, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
-            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0xff8000, blendTargetColor: 0xff8000, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
+            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0000ff, blendTargetColor: 0x0000ff, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0xffff00, blendTargetColor: 0xffff00, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xff0000, blendTargetColor: 0xff0000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x800080, blendTargetColor: 0x800080, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0xff8000, blendTargetColor: 0xff8000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
         ];
         // Draw grid
         this.gridGraphics = this.add.graphics();
@@ -183,6 +214,10 @@ export default class ExplorationScene extends Phaser.Scene {
         // Create HUD text (above grid)
         this.hudText = this.add.text(5, 5, '', { font: '12px Arial', color: '#ffffff' });
         this.hudText.setDepth(100);
+        // Create death tally display (right of grid)
+        const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
+        this.tallyText = this.add.text(tallyX, this.hudHeight + 10, '', { font: '11px Arial', color: '#888888' });
+        this.tallyText.setDepth(100);
         // Setup input
         this.cursors = this.input.keyboard?.createCursorKeys();
     }
@@ -248,8 +283,12 @@ export default class ExplorationScene extends Phaser.Scene {
                 }
             }
         });
-        // Update entity movement
+        // Update entity movement and stuck timer
         this.entities.forEach((entity) => {
+            if (entity.isDying)
+                return;
+            const prevX = entity.x;
+            const prevY = entity.y;
             entity.moveTimer += deltaSeconds;
             if (entity.moveTimer >= this.moveInterval) {
                 // Green (happy) entities don't move
@@ -259,7 +298,7 @@ export default class ExplorationScene extends Phaser.Scene {
                         // Check if destination is occupied by player
                         const occupiedByPlayer = this.playerGridX === move.x && this.playerGridY === move.y;
                         // Check if destination is occupied by another entity or growing square
-                        const occupiedByEntity = this.entities.find(e => e !== entity && e.x === move.x && e.y === move.y);
+                        const occupiedByEntity = this.entities.find(e => e !== entity && e.x === move.x && e.y === move.y && !e.isDying);
                         const occupiedByGrowing = this.entities.some(e => e.growingSquares?.some(g => g.x === move.x && g.y === move.y));
                         if (occupiedByPlayer || occupiedByEntity || occupiedByGrowing) {
                             // Can't move there, but trigger blend collision if entity
@@ -275,6 +314,18 @@ export default class ExplorationScene extends Phaser.Scene {
                     }
                 }
                 entity.moveTimer = 0;
+            }
+            // Track stuck time
+            if (entity.x === prevX && entity.y === prevY) {
+                entity.stuckTimer += deltaSeconds;
+                if (entity.stuckTimer >= this.stuckTimeLimit) {
+                    entity.isDying = true;
+                    entity.deathProgress = 0;
+                    this.deathTally[entity.emotion]++;
+                }
+            }
+            else {
+                entity.stuckTimer = 0;
             }
             // Smooth visual movement
             entity.visualX = entity.x;
@@ -294,9 +345,12 @@ export default class ExplorationScene extends Phaser.Scene {
                     this.updateEmotionFromColor(entity);
                 }
             }
-            // Redraw entity every frame (movement + blending)
-            if (entity.graphics) {
+            // Redraw entity every frame (movement + blending + death)
+            if (entity.graphics && !entity.isDying) {
                 this.drawEntity(entity.graphics, entity);
+            }
+            else if (entity.graphics && entity.isDying) {
+                this.drawDyingEntity(entity.graphics, entity);
             }
         });
         // Update move timer
@@ -321,11 +375,42 @@ export default class ExplorationScene extends Phaser.Scene {
                 this.moveTimer = 0;
             }
         }
+        // Handle death animations
+        for (let i = this.entities.length - 1; i >= 0; i--) {
+            const entity = this.entities[i];
+            if (entity.isDying) {
+                entity.deathProgress += deltaSeconds / this.deathDuration;
+                if (entity.deathProgress > 1) {
+                    entity.deathProgress = 1;
+                }
+                // When death completes, remove entity
+                if (entity.deathProgress === 1) {
+                    if (entity.graphics)
+                        entity.graphics.destroy();
+                    if (entity.label)
+                        entity.label.destroy();
+                    this.entities.splice(i, 1);
+                }
+            }
+        }
         // Update HUD
         const timeUntilNext = Math.max(0, this.moveInterval - this.moveTimer);
         const inputStr = this.lastInput || 'none';
         const hudContent = `FPS: ${Math.round(this.currentFps)} | Position: (${this.playerGridX}, ${this.playerGridY}) | Next move in: ${timeUntilNext.toFixed(2)}s | Input: ${inputStr}`;
         this.hudText?.setText(hudContent);
+        // Update death tally display
+        if (this.tallyText) {
+            const tallyLines = [
+                'Deaths:',
+                `Sad: ${this.deathTally.sad}`,
+                `Neutral: ${this.deathTally.neutral}`,
+                `Angry: ${this.deathTally.angry}`,
+                `Curious: ${this.deathTally.curious}`,
+                `Excited: ${this.deathTally.excited}`,
+                `Happy: ${this.deathTally.happy}`,
+            ];
+            this.tallyText.setText(tallyLines.join('\n'));
+        }
     }
     drawGrid() {
         if (!this.gridGraphics)
@@ -675,6 +760,9 @@ export default class ExplorationScene extends Phaser.Scene {
             blendTargetColor: growing.color,
             blendDuration: this.blendDuration,
             moveTimer: 0,
+            stuckTimer: 0,
+            deathProgress: 0,
+            isDying: false,
             growingSquares: [],
         };
         // Create graphics and label
@@ -691,5 +779,17 @@ export default class ExplorationScene extends Phaser.Scene {
         if (growing.label) {
             growing.label.destroy();
         }
+    }
+    drawDyingEntity(graphics, entity) {
+        graphics.clear();
+        // Shrink from full size to dot as death progresses
+        const sizeProgress = 1 - entity.deathProgress; // 1 to 0
+        const displaySize = 0.2 + (1 - 0.2) * sizeProgress; // 1 to 0.2
+        const x = this.padding + entity.x * this.cellSize + (this.cellSize * (1 - displaySize)) / 2;
+        const y = this.hudHeight + this.padding + entity.y * this.cellSize + (this.cellSize * (1 - displaySize)) / 2;
+        const size = this.cellSize * displaySize;
+        // Fade out as it shrinks
+        graphics.fillStyle(entity.currentColor, sizeProgress);
+        graphics.fillRect(x, y, size, size);
     }
 }
