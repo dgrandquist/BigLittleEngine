@@ -32,6 +32,18 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: 1.0
         });
+        Object.defineProperty(this, "playerColor", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 0x00ff00
+        });
+        Object.defineProperty(this, "blendDuration", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 2.0
+        });
         Object.defineProperty(this, "playerGridX", {
             enumerable: true,
             configurable: true,
@@ -138,11 +150,11 @@ export default class ExplorationScene extends Phaser.Scene {
     create() {
         // Initialize entities
         this.entities = [
-            { x: 1, y: 1, color: 0x0000ff, emotion: 'sad' },
-            { x: 8, y: 2, color: 0xffff00, emotion: 'neutral' },
-            { x: 3, y: 7, color: 0xff0000, emotion: 'angry' },
-            { x: 7, y: 8, color: 0x800080, emotion: 'curious' },
-            { x: 5, y: 2, color: 0xff8000, emotion: 'excited' },
+            { x: 1, y: 1, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', blendProgress: -1, blendStartColor: 0x0000ff, blendDuration: this.blendDuration },
+            { x: 8, y: 2, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', blendProgress: -1, blendStartColor: 0xffff00, blendDuration: this.blendDuration },
+            { x: 3, y: 7, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', blendProgress: -1, blendStartColor: 0xff0000, blendDuration: this.blendDuration },
+            { x: 7, y: 8, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', blendProgress: -1, blendStartColor: 0x800080, blendDuration: this.blendDuration },
+            { x: 5, y: 2, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', blendProgress: -1, blendStartColor: 0xff8000, blendDuration: this.blendDuration },
         ];
         // Draw grid
         this.gridGraphics = this.add.graphics();
@@ -150,8 +162,9 @@ export default class ExplorationScene extends Phaser.Scene {
         // Draw entities
         this.entities.forEach((entity) => {
             const g = this.add.graphics();
-            this.drawEntity(g, entity);
             this.entityGraphics.push(g);
+            entity.graphics = g;
+            this.drawEntity(g, entity);
         });
         // Draw player
         this.playerGraphics = this.add.graphics();
@@ -195,6 +208,21 @@ export default class ExplorationScene extends Phaser.Scene {
         else {
             this.lastInput = null;
         }
+        // Update entity blends
+        this.entities.forEach((entity) => {
+            if (entity.blendProgress >= 0 && entity.blendProgress < 1) {
+                entity.blendProgress += deltaSeconds / entity.blendDuration;
+                if (entity.blendProgress > 1) {
+                    entity.blendProgress = 1;
+                }
+                // Update color based on blend progress
+                entity.currentColor = this.lerpColor(entity.blendStartColor, this.playerColor, entity.blendProgress);
+                // Redraw entity with new color
+                if (entity.graphics) {
+                    this.drawEntity(entity.graphics, entity);
+                }
+            }
+        });
         // Update move timer
         this.moveTimer += deltaSeconds;
         // Execute move when ready
@@ -202,13 +230,20 @@ export default class ExplorationScene extends Phaser.Scene {
             const newX = Math.max(0, Math.min(this.gridWidth - 1, this.playerGridX + moveDirection.dx));
             const newY = Math.max(0, Math.min(this.gridHeight - 1, this.playerGridY + moveDirection.dy));
             // Check if square is occupied by an entity
-            const isOccupied = this.entities.some(e => e.x === newX && e.y === newY);
-            if (!isOccupied) {
+            const touchedEntity = this.entities.find(e => e.x === newX && e.y === newY);
+            if (touchedEntity) {
+                // Start blend on touched entity (from current color to player color)
+                this.startEntityBlend(touchedEntity);
+                // Don't reset timer - let player try a different direction immediately
+            }
+            else {
+                // Move only if not occupied
                 this.playerGridX = newX;
                 this.playerGridY = newY;
                 this.animatePlayerMove(newX, newY);
+                // Only reset timer on successful movement
+                this.moveTimer = 0;
             }
-            this.moveTimer = 0;
         }
         // Update HUD
         const timeUntilNext = Math.max(0, this.moveInterval - this.moveTimer);
@@ -239,7 +274,8 @@ export default class ExplorationScene extends Phaser.Scene {
         const x = this.padding + entity.x * this.cellSize + 2;
         const y = this.padding + entity.y * this.cellSize + 2;
         const size = this.cellSize - 4;
-        graphics.fillStyle(entity.color);
+        graphics.clear();
+        graphics.fillStyle(entity.currentColor);
         graphics.fillRect(x, y, size, size);
     }
     drawPlayer() {
@@ -274,5 +310,23 @@ export default class ExplorationScene extends Phaser.Scene {
                 this.drawPlayer();
             },
         });
+    }
+    lerpColor(colorA, colorB, t) {
+        const rA = (colorA >> 16) & 0xff;
+        const gA = (colorA >> 8) & 0xff;
+        const bA = colorA & 0xff;
+        const rB = (colorB >> 16) & 0xff;
+        const gB = (colorB >> 8) & 0xff;
+        const bB = colorB & 0xff;
+        const r = Math.round(rA + (rB - rA) * t);
+        const g = Math.round(gA + (gB - gA) * t);
+        const b = Math.round(bA + (bB - bA) * t);
+        return (r << 16) | (g << 8) | b;
+    }
+    startEntityBlend(entity) {
+        // Save current color as blend start color
+        entity.blendStartColor = entity.currentColor;
+        // Reset blend progress to start the animation
+        entity.blendProgress = 0;
     }
 }

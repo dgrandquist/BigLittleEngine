@@ -3,8 +3,12 @@ import Phaser from 'phaser';
 interface Entity {
   x: number;
   y: number;
-  color: number;
+  originalColor: number;
+  currentColor: number;
   emotion: string;
+  blendProgress: number;
+  blendStartColor: number;
+  blendDuration: number;
   graphics?: Phaser.GameObjects.Graphics;
 }
 
@@ -14,6 +18,8 @@ export default class ExplorationScene extends Phaser.Scene {
   private cellSize = 40;
   private padding = 20;
   private moveInterval = 1.0;
+  private playerColor = 0x00ff00;
+  private blendDuration = 2.0;
 
   private playerGridX = 5;
   private playerGridY = 5;
@@ -44,11 +50,11 @@ export default class ExplorationScene extends Phaser.Scene {
   create() {
     // Initialize entities
     this.entities = [
-      { x: 1, y: 1, color: 0x0000ff, emotion: 'sad' },
-      { x: 8, y: 2, color: 0xffff00, emotion: 'neutral' },
-      { x: 3, y: 7, color: 0xff0000, emotion: 'angry' },
-      { x: 7, y: 8, color: 0x800080, emotion: 'curious' },
-      { x: 5, y: 2, color: 0xff8000, emotion: 'excited' },
+      { x: 1, y: 1, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', blendProgress: -1, blendStartColor: 0x0000ff, blendDuration: this.blendDuration },
+      { x: 8, y: 2, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', blendProgress: -1, blendStartColor: 0xffff00, blendDuration: this.blendDuration },
+      { x: 3, y: 7, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', blendProgress: -1, blendStartColor: 0xff0000, blendDuration: this.blendDuration },
+      { x: 7, y: 8, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', blendProgress: -1, blendStartColor: 0x800080, blendDuration: this.blendDuration },
+      { x: 5, y: 2, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', blendProgress: -1, blendStartColor: 0xff8000, blendDuration: this.blendDuration },
     ];
 
     // Draw grid
@@ -58,8 +64,9 @@ export default class ExplorationScene extends Phaser.Scene {
     // Draw entities
     this.entities.forEach((entity) => {
       const g = this.add.graphics();
-      this.drawEntity(g, entity);
       this.entityGraphics.push(g);
+      entity.graphics = g;
+      this.drawEntity(g, entity);
     });
 
     // Draw player
@@ -107,6 +114,26 @@ export default class ExplorationScene extends Phaser.Scene {
       this.lastInput = null;
     }
 
+    // Update entity blends
+    this.entities.forEach((entity) => {
+      if (entity.blendProgress >= 0 && entity.blendProgress < 1) {
+        entity.blendProgress += deltaSeconds / entity.blendDuration;
+        if (entity.blendProgress > 1) {
+          entity.blendProgress = 1;
+        }
+        // Update color based on blend progress
+        entity.currentColor = this.lerpColor(
+          entity.blendStartColor,
+          this.playerColor,
+          entity.blendProgress
+        );
+        // Redraw entity with new color
+        if (entity.graphics) {
+          this.drawEntity(entity.graphics, entity);
+        }
+      }
+    });
+
     // Update move timer
     this.moveTimer += deltaSeconds;
 
@@ -116,15 +143,20 @@ export default class ExplorationScene extends Phaser.Scene {
       const newY = Math.max(0, Math.min(this.gridHeight - 1, this.playerGridY + moveDirection.dy));
 
       // Check if square is occupied by an entity
-      const isOccupied = this.entities.some(e => e.x === newX && e.y === newY);
+      const touchedEntity = this.entities.find(e => e.x === newX && e.y === newY);
 
-      if (!isOccupied) {
+      if (touchedEntity) {
+        // Start blend on touched entity (from current color to player color)
+        this.startEntityBlend(touchedEntity);
+        // Don't reset timer - let player try a different direction immediately
+      } else {
+        // Move only if not occupied
         this.playerGridX = newX;
         this.playerGridY = newY;
         this.animatePlayerMove(newX, newY);
+        // Only reset timer on successful movement
+        this.moveTimer = 0;
       }
-
-      this.moveTimer = 0;
     }
 
     // Update HUD
@@ -162,7 +194,8 @@ export default class ExplorationScene extends Phaser.Scene {
     const y = this.padding + entity.y * this.cellSize + 2;
     const size = this.cellSize - 4;
 
-    graphics.fillStyle(entity.color);
+    graphics.clear();
+    graphics.fillStyle(entity.currentColor);
     graphics.fillRect(x, y, size, size);
   }
 
@@ -204,5 +237,28 @@ export default class ExplorationScene extends Phaser.Scene {
         this.drawPlayer();
       },
     });
+  }
+
+  private lerpColor(colorA: number, colorB: number, t: number): number {
+    const rA = (colorA >> 16) & 0xff;
+    const gA = (colorA >> 8) & 0xff;
+    const bA = colorA & 0xff;
+
+    const rB = (colorB >> 16) & 0xff;
+    const gB = (colorB >> 8) & 0xff;
+    const bB = colorB & 0xff;
+
+    const r = Math.round(rA + (rB - rA) * t);
+    const g = Math.round(gA + (gB - gA) * t);
+    const b = Math.round(bA + (bB - bA) * t);
+
+    return (r << 16) | (g << 8) | b;
+  }
+
+  private startEntityBlend(entity: Entity): void {
+    // Save current color as blend start color
+    entity.blendStartColor = entity.currentColor;
+    // Reset blend progress to start the animation
+    entity.blendProgress = 0;
   }
 }
