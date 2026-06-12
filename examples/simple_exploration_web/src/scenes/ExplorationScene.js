@@ -156,11 +156,11 @@ export default class ExplorationScene extends Phaser.Scene {
     create() {
         // Initialize entities (spread across larger 20x20 grid)
         this.entities = [
-            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0000ff, blendTargetColor: 0x0000ff, blendDuration: this.blendDuration, moveTimer: 0 },
-            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0xffff00, blendTargetColor: 0xffff00, blendDuration: this.blendDuration, moveTimer: 0 },
-            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xff0000, blendTargetColor: 0xff0000, blendDuration: this.blendDuration, moveTimer: 0 },
-            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x800080, blendTargetColor: 0x800080, blendDuration: this.blendDuration, moveTimer: 0 },
-            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0xff8000, blendTargetColor: 0xff8000, blendDuration: this.blendDuration, moveTimer: 0 },
+            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0000ff, blendTargetColor: 0x0000ff, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
+            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0xffff00, blendTargetColor: 0xffff00, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
+            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xff0000, blendTargetColor: 0xff0000, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
+            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x800080, blendTargetColor: 0x800080, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
+            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0xff8000, blendTargetColor: 0xff8000, blendDuration: this.blendDuration, moveTimer: 0, growingSquares: [] },
         ];
         // Draw grid
         this.gridGraphics = this.add.graphics();
@@ -217,6 +217,34 @@ export default class ExplorationScene extends Phaser.Scene {
         else {
             this.lastInput = null;
         }
+        // Update growing squares
+        this.entities.forEach((entity) => {
+            if (!entity.growingSquares)
+                entity.growingSquares = [];
+            entity.growingSquares.forEach((growing, index) => {
+                // Update launch animation
+                if (growing.launchProgress < 1) {
+                    growing.launchProgress += deltaSeconds / growing.launchDuration;
+                    if (growing.launchProgress >= 1) {
+                        growing.launchProgress = 1;
+                    }
+                }
+                // Update growth animation (starts after launch completes)
+                if (growing.launchProgress === 1 && growing.growthProgress < 1) {
+                    growing.growthProgress += deltaSeconds / growing.growthDuration;
+                    if (growing.growthProgress > 1) {
+                        growing.growthProgress = 1;
+                    }
+                }
+                // When fully grown, add to entities and remove from growing
+                if (growing.growthProgress === 1) {
+                    this.spawnFullyGrownEntity(growing);
+                    entity.growingSquares.splice(index, 1);
+                }
+                // Render growing square
+                this.drawGrowingSquare(growing);
+            });
+        });
         // Update entity movement
         this.entities.forEach((entity) => {
             entity.moveTimer += deltaSeconds;
@@ -225,11 +253,14 @@ export default class ExplorationScene extends Phaser.Scene {
                 if (entity.currentColor !== 0x00ff00) {
                     const move = this.getBehaviorMove(entity);
                     if (move) {
-                        // Check if destination is occupied by another entity
+                        // Check if destination is occupied by another entity or growing square
                         const occupiedByEntity = this.entities.find(e => e !== entity && e.x === move.x && e.y === move.y);
-                        if (occupiedByEntity) {
-                            // Can't move there, but trigger blend collision
-                            this.blendEntityTowards(occupiedByEntity, entity.currentColor);
+                        const occupiedByGrowing = this.entities.some(e => e.growingSquares?.some(g => g.x === move.x && g.y === move.y));
+                        if (occupiedByEntity || occupiedByGrowing) {
+                            // Can't move there, but trigger blend collision if entity
+                            if (occupiedByEntity) {
+                                this.blendEntityTowards(occupiedByEntity, entity.currentColor);
+                            }
                         }
                         else {
                             // Move to empty cell
@@ -475,6 +506,12 @@ export default class ExplorationScene extends Phaser.Scene {
         };
     }
     behaviorCurious(entity) {
+        // Try to spawn new growth if under limit
+        if (entity.growingSquares && entity.growingSquares.length < 3) {
+            if (Math.random() < 0.1) { // 10% chance each move to spawn
+                this.launchNewGrowth(entity);
+            }
+        }
         // Move to different colors in sequence
         if (entity.targetX === undefined || entity.targetY === undefined) {
             const others = this.entities.filter(e => e !== entity);
@@ -525,5 +562,129 @@ export default class ExplorationScene extends Phaser.Scene {
             x: Math.max(0, Math.min(this.gridWidth - 1, newX)),
             y: Math.max(0, Math.min(this.gridHeight - 1, newY)),
         };
+    }
+    launchNewGrowth(entity) {
+        // Find random empty cell that's not occupied
+        let targetX, targetY, attempts = 0;
+        do {
+            targetX = Math.floor(Math.random() * this.gridWidth);
+            targetY = Math.floor(Math.random() * this.gridHeight);
+            attempts++;
+        } while (attempts < 10 &&
+            (this.entities.some(e => e.x === targetX && e.y === targetY) ||
+                this.entities.some(e => e.growingSquares?.some(g => g.x === targetX && g.y === targetY))));
+        if (attempts >= 10)
+            return; // Couldn't find empty cell
+        // Pick random emotion for new square
+        const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited'];
+        const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+        const emotionToColor = {
+            sad: 0x0000ff,
+            neutral: 0xffff00,
+            angry: 0xff0000,
+            curious: 0x800080,
+            excited: 0xff8000,
+        };
+        const growing = {
+            x: targetX,
+            y: targetY,
+            sourceX: entity.x,
+            sourceY: entity.y,
+            emotion: randomEmotion,
+            color: emotionToColor[randomEmotion],
+            launchProgress: 0,
+            growthProgress: 0,
+            launchDuration: 1.0,
+            growthDuration: 5.0,
+        };
+        // Create graphics for growing square
+        growing.graphics = this.add.graphics();
+        growing.label = this.add.text(0, 0, '', { font: 'bold 7px Arial', color: '#ffffff' });
+        growing.label.setDepth(20);
+        if (entity.growingSquares) {
+            entity.growingSquares.push(growing);
+        }
+    }
+    drawGrowingSquare(growing) {
+        if (!growing.graphics)
+            return;
+        growing.graphics.clear();
+        // Lerp position during launch phase
+        let displayX = growing.sourceX;
+        let displayY = growing.sourceY;
+        let displaySize = 1; // In cells
+        if (growing.launchProgress < 1) {
+            // Launch animation: move from source to target
+            displayX = growing.sourceX + (growing.x - growing.sourceX) * growing.launchProgress;
+            displayY = growing.sourceY + (growing.y - growing.sourceY) * growing.launchProgress;
+            displaySize = 0.2; // Small dot during launch
+        }
+        else {
+            // Growth animation: grow from small to full size
+            displayX = growing.x;
+            displayY = growing.y;
+            displaySize = 0.2 + (1 - 0.2) * growing.growthProgress; // 20% to 100%
+        }
+        // Convert to screen coordinates
+        const x = this.padding + displayX * this.cellSize + (this.cellSize * (1 - displaySize)) / 2;
+        const y = this.hudHeight + this.padding + displayY * this.cellSize + (this.cellSize * (1 - displaySize)) / 2;
+        const size = this.cellSize * displaySize;
+        // Draw square
+        growing.graphics.fillStyle(growing.color);
+        growing.graphics.fillRect(x, y, size, size);
+        // Update label (show emotion need when grown enough)
+        if (growing.label && displaySize > 0.5) {
+            const emotionToNeed = {
+                happy: 'REST',
+                sad: 'FLEE',
+                neutral: 'ROAM',
+                angry: 'SEEK',
+                curious: 'EXPLORE',
+                excited: 'VISIT',
+            };
+            growing.label.setText(emotionToNeed[growing.emotion]);
+            growing.label.setPosition(x + 1, y + 3);
+            growing.label.setFontSize(Math.max(5, 7 * displaySize));
+        }
+    }
+    spawnFullyGrownEntity(growing) {
+        const emotionToNeed = {
+            happy: 'REST',
+            sad: 'FLEE',
+            neutral: 'ROAM',
+            angry: 'SEEK',
+            curious: 'EXPLORE',
+            excited: 'VISIT',
+        };
+        const newEntity = {
+            x: growing.x,
+            y: growing.y,
+            visualX: growing.x,
+            visualY: growing.y,
+            originalColor: growing.color,
+            currentColor: growing.color,
+            emotion: growing.emotion,
+            need: emotionToNeed[growing.emotion],
+            blendProgress: -1,
+            blendStartColor: growing.color,
+            blendTargetColor: growing.color,
+            blendDuration: this.blendDuration,
+            moveTimer: 0,
+            growingSquares: [],
+        };
+        // Create graphics and label
+        const g = this.add.graphics();
+        newEntity.graphics = g;
+        const label = this.add.text(0, 0, newEntity.need, { font: 'bold 7px Arial', color: '#ffffff' });
+        label.setDepth(20);
+        newEntity.label = label;
+        this.entities.push(newEntity);
+        // Clean up growing square graphics
+        if (growing.graphics) {
+            growing.graphics.destroy();
+        }
+        if (growing.label) {
+            growing.label.destroy();
+        }
     }
 }
