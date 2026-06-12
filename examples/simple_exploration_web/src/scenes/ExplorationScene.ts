@@ -147,7 +147,9 @@ export default class ExplorationScene extends Phaser.Scene {
     this.entities.forEach((entity) => {
       if (!entity.growingSquares) entity.growingSquares = [];
 
-      entity.growingSquares.forEach((growing, index) => {
+      for (let i = entity.growingSquares.length - 1; i >= 0; i--) {
+        const growing = entity.growingSquares[i];
+
         // Update launch animation
         if (growing.launchProgress < 1) {
           growing.launchProgress += deltaSeconds / growing.launchDuration;
@@ -167,12 +169,12 @@ export default class ExplorationScene extends Phaser.Scene {
         // When fully grown, add to entities and remove from growing
         if (growing.growthProgress === 1) {
           this.spawnFullyGrownEntity(growing);
-          entity.growingSquares!.splice(index, 1);
+          entity.growingSquares!.splice(i, 1);
+        } else {
+          // Render growing square only if not yet spawned
+          this.drawGrowingSquare(growing);
         }
-
-        // Render growing square
-        this.drawGrowingSquare(growing);
-      });
+      }
     });
 
     // Update entity movement
@@ -184,6 +186,9 @@ export default class ExplorationScene extends Phaser.Scene {
         if (entity.currentColor !== 0x00ff00) {
           const move = this.getBehaviorMove(entity);
           if (move) {
+            // Check if destination is occupied by player
+            const occupiedByPlayer = this.playerGridX === move.x && this.playerGridY === move.y;
+
             // Check if destination is occupied by another entity or growing square
             const occupiedByEntity = this.entities.find(
               e => e !== entity && e.x === move.x && e.y === move.y
@@ -193,7 +198,7 @@ export default class ExplorationScene extends Phaser.Scene {
               e => e.growingSquares?.some(g => g.x === move.x && g.y === move.y)
             );
 
-            if (occupiedByEntity || occupiedByGrowing) {
+            if (occupiedByPlayer || occupiedByEntity || occupiedByGrowing) {
               // Can't move there, but trigger blend collision if entity
               if (occupiedByEntity) {
                 this.blendEntityTowards(occupiedByEntity, entity.currentColor);
