@@ -131,17 +131,20 @@ export default class ExplorationScene extends Phaser.Scene {
       entity.moveTimer += deltaSeconds;
 
       if (entity.moveTimer >= this.moveInterval) {
-        const move = this.getBehaviorMove(entity);
-        if (move) {
-          entity.x = move.x;
-          entity.y = move.y;
+        // Green (happy) entities don't move
+        if (entity.currentColor !== 0x00ff00) {
+          const move = this.getBehaviorMove(entity);
+          if (move) {
+            entity.x = move.x;
+            entity.y = move.y;
 
-          // Check entity-to-entity collisions (touching triggers blend)
-          const otherEntity = this.entities.find(
-            e => e !== entity && e.x === entity.x && e.y === entity.y
-          );
-          if (otherEntity) {
-            this.blendEntityTowards(otherEntity, entity.currentColor);
+            // Check entity-to-entity collisions (touching triggers blend)
+            const otherEntity = this.entities.find(
+              e => e !== entity && e.x === entity.x && e.y === entity.y
+            );
+            if (otherEntity) {
+              this.blendEntityTowards(otherEntity, entity.currentColor);
+            }
           }
         }
         entity.moveTimer = 0;
@@ -165,6 +168,11 @@ export default class ExplorationScene extends Phaser.Scene {
           entity.blendTargetColor,
           entity.blendProgress
         );
+
+        // When blend completes, update emotion to match new color
+        if (entity.blendProgress === 1) {
+          this.updateEmotionFromColor(entity);
+        }
       }
 
       // Redraw entity every frame (movement + blending)
@@ -313,8 +321,36 @@ export default class ExplorationScene extends Phaser.Scene {
     entity.blendProgress = 0;
   }
 
+  private updateEmotionFromColor(entity: Entity): void {
+    // Map color to emotion and update behavior
+    const colorToEmotion: { [key: number]: string } = {
+      0x00ff00: 'happy',     // green = player's happy emotion
+      0x0000ff: 'sad',       // blue
+      0xffff00: 'neutral',   // yellow
+      0xff0000: 'angry',     // red
+      0x800080: 'curious',   // purple
+      0xff8000: 'excited',   // orange
+    };
+
+    const newEmotion = colorToEmotion[entity.currentColor] || entity.emotion;
+    entity.emotion = newEmotion;
+
+    // Update need label to match new emotion
+    const emotionToNeed: { [key: string]: string } = {
+      happy: 'REST',
+      sad: 'FLEE',
+      neutral: 'ROAM',
+      angry: 'SEEK',
+      curious: 'EXPLORE',
+      excited: 'VISIT',
+    };
+    entity.need = emotionToNeed[newEmotion] || entity.need;
+  }
+
   private getBehaviorMove(entity: Entity): { x: number; y: number } | null {
     switch (entity.emotion) {
+      case 'happy':
+        return { x: entity.x, y: entity.y }; // Stay still
       case 'sad':
         return this.behaviorSad(entity);
       case 'neutral':
