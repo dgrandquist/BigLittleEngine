@@ -17,6 +17,8 @@ export default class ExplorationScene extends Phaser.Scene {
 
   private playerGridX = 5;
   private playerGridY = 5;
+  private playerVisualX = 5;
+  private playerVisualY = 5;
   private playerGraphics?: Phaser.GameObjects.Graphics;
   private playerLabel?: Phaser.GameObjects.Text;
   private playerTween?: Phaser.Tweens.Tween;
@@ -117,9 +119,9 @@ export default class ExplorationScene extends Phaser.Scene {
       const isOccupied = this.entities.some(e => e.x === newX && e.y === newY);
 
       if (!isOccupied) {
-        this.animatePlayerMove(newX, newY);
         this.playerGridX = newX;
         this.playerGridY = newY;
+        this.animatePlayerMove(newX, newY);
       }
 
       this.moveTimer = 0;
@@ -169,8 +171,9 @@ export default class ExplorationScene extends Phaser.Scene {
 
     this.playerGraphics.clear();
 
-    const x = this.padding + this.playerGridX * this.cellSize;
-    const y = this.padding + this.playerGridY * this.cellSize;
+    // Use visual position for smooth animation
+    const x = this.padding + this.playerVisualX * this.cellSize;
+    const y = this.padding + this.playerVisualY * this.cellSize;
     const size = this.cellSize;
 
     // Border
@@ -190,13 +193,11 @@ export default class ExplorationScene extends Phaser.Scene {
       this.playerTween.stop();
     }
 
-    const startX = this.playerGridX;
-    const startY = this.playerGridY;
-
+    // Tween the visual position smoothly over 1 second
     this.playerTween = this.tweens.add({
       targets: this,
-      playerGridX: newX,
-      playerGridY: newY,
+      playerVisualX: newX,
+      playerVisualY: newY,
       duration: this.moveInterval * 1000,
       ease: 'Linear',
       onUpdate: () => {

@@ -44,6 +44,18 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: 5
         });
+        Object.defineProperty(this, "playerVisualX", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 5
+        });
+        Object.defineProperty(this, "playerVisualY", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 5
+        });
         Object.defineProperty(this, "playerGraphics", {
             enumerable: true,
             configurable: true,
@@ -192,9 +204,9 @@ export default class ExplorationScene extends Phaser.Scene {
             // Check if square is occupied by an entity
             const isOccupied = this.entities.some(e => e.x === newX && e.y === newY);
             if (!isOccupied) {
-                this.animatePlayerMove(newX, newY);
                 this.playerGridX = newX;
                 this.playerGridY = newY;
+                this.animatePlayerMove(newX, newY);
             }
             this.moveTimer = 0;
         }
@@ -234,8 +246,9 @@ export default class ExplorationScene extends Phaser.Scene {
         if (!this.playerGraphics || !this.playerLabel)
             return;
         this.playerGraphics.clear();
-        const x = this.padding + this.playerGridX * this.cellSize;
-        const y = this.padding + this.playerGridY * this.cellSize;
+        // Use visual position for smooth animation
+        const x = this.padding + this.playerVisualX * this.cellSize;
+        const y = this.padding + this.playerVisualY * this.cellSize;
         const size = this.cellSize;
         // Border
         this.playerGraphics.lineStyle(2, 0xffffff);
@@ -250,12 +263,11 @@ export default class ExplorationScene extends Phaser.Scene {
         if (this.playerTween) {
             this.playerTween.stop();
         }
-        const startX = this.playerGridX;
-        const startY = this.playerGridY;
+        // Tween the visual position smoothly over 1 second
         this.playerTween = this.tweens.add({
             targets: this,
-            playerGridX: newX,
-            playerGridY: newY,
+            playerVisualX: newX,
+            playerVisualY: newY,
             duration: this.moveInterval * 1000,
             ease: 'Linear',
             onUpdate: () => {
