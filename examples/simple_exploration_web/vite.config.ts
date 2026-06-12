@@ -6,7 +6,6 @@ export default defineConfig({
     host: 'localhost'
   },
   build: {
-    target: 'ES2020',
-    minify: 'terser'
+    target: 'ES2020'
   }
 })

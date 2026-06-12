@@ -50,18 +50,18 @@ export default class ExplorationScene extends Phaser.Scene {
     ];
 
     // Draw grid
-    this.gridGraphics = this.make.graphics({ x: 0, y: 0, add: true });
+    this.gridGraphics = this.add.graphics();
     this.drawGrid();
 
     // Draw entities
     this.entities.forEach((entity) => {
-      const g = this.make.graphics({ x: 0, y: 0, add: true });
+      const g = this.add.graphics();
       this.drawEntity(g, entity);
       this.entityGraphics.push(g);
     });
 
     // Draw player
-    this.playerGraphics = this.make.graphics({ x: 0, y: 0, add: true });
+    this.playerGraphics = this.add.graphics();
     this.drawPlayer();
 
     // Create HUD text
