@@ -24,7 +24,13 @@ export default class ExplorationScene extends Phaser.Scene {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 10
+            value: 5
+        });
+        Object.defineProperty(this, "hudHeight", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 50
         });
         Object.defineProperty(this, "moveInterval", {
             enumerable: true,
@@ -174,8 +180,8 @@ export default class ExplorationScene extends Phaser.Scene {
         this.playerLabel = this.add.text(0, 0, 'YOU', { font: 'bold 14px Arial', color: '#ffffff' });
         this.playerLabel.setDepth(10);
         this.drawPlayer();
-        // Create HUD text
-        this.hudText = this.add.text(10, 10, '', { font: '14px Arial', color: '#ffffff' });
+        // Create HUD text (above grid)
+        this.hudText = this.add.text(5, 5, '', { font: '12px Arial', color: '#ffffff' });
         this.hudText.setDepth(100);
         // Setup input
         this.cursors = this.input.keyboard?.createCursorKeys();
@@ -215,14 +221,21 @@ export default class ExplorationScene extends Phaser.Scene {
         this.entities.forEach((entity) => {
             entity.moveTimer += deltaSeconds;
             if (entity.moveTimer >= this.moveInterval) {
-                const move = this.getBehaviorMove(entity);
-                if (move) {
-                    entity.x = move.x;
-                    entity.y = move.y;
-                    // Check entity-to-entity collisions (touching triggers blend)
-                    const otherEntity = this.entities.find(e => e !== entity && e.x === entity.x && e.y === entity.y);
-                    if (otherEntity) {
-                        this.blendEntityTowards(otherEntity, entity.currentColor);
+                // Green (happy) entities don't move
+                if (entity.currentColor !== 0x00ff00) {
+                    const move = this.getBehaviorMove(entity);
+                    if (move) {
+                        // Check if destination is occupied by another entity
+                        const occupiedByEntity = this.entities.find(e => e !== entity && e.x === move.x && e.y === move.y);
+                        if (occupiedByEntity) {
+                            // Can't move there, but trigger blend collision
+                            this.blendEntityTowards(occupiedByEntity, entity.currentColor);
+                        }
+                        else {
+                            // Move to empty cell
+                            entity.x = move.x;
+                            entity.y = move.y;
+                        }
                     }
                 }
                 entity.moveTimer = 0;
@@ -240,6 +253,10 @@ export default class ExplorationScene extends Phaser.Scene {
                 }
                 // Update color based on blend progress toward target color
                 entity.currentColor = this.lerpColor(entity.blendStartColor, entity.blendTargetColor, entity.blendProgress);
+                // When blend completes, update emotion to match new color
+                if (entity.blendProgress === 1) {
+                    this.updateEmotionFromColor(entity);
+                }
             }
             // Redraw entity every frame (movement + blending)
             if (entity.graphics) {
@@ -279,15 +296,16 @@ export default class ExplorationScene extends Phaser.Scene {
             return;
         this.gridGraphics.clear();
         this.gridGraphics.lineStyle(1, 0x808080);
+        const gridStartY = this.hudHeight;
         // Vertical lines
         for (let x = 0; x <= this.gridWidth; x++) {
             const xPos = this.padding + x * this.cellSize;
-            this.gridGraphics.moveTo(xPos, this.padding);
-            this.gridGraphics.lineTo(xPos, this.padding + this.gridHeight * this.cellSize);
+            this.gridGraphics.moveTo(xPos, gridStartY + this.padding);
+            this.gridGraphics.lineTo(xPos, gridStartY + this.padding + this.gridHeight * this.cellSize);
         }
         // Horizontal lines
         for (let y = 0; y <= this.gridHeight; y++) {
-            const yPos = this.padding + y * this.cellSize;
+            const yPos = gridStartY + this.padding + y * this.cellSize;
             this.gridGraphics.moveTo(this.padding, yPos);
             this.gridGraphics.lineTo(this.padding + this.gridWidth * this.cellSize, yPos);
         }
@@ -295,14 +313,15 @@ export default class ExplorationScene extends Phaser.Scene {
     }
     drawEntity(graphics, entity) {
         const x = this.padding + entity.visualX * this.cellSize + 2;
-        const y = this.padding + entity.visualY * this.cellSize + 2;
+        const y = this.hudHeight + this.padding + entity.visualY * this.cellSize + 2;
         const size = this.cellSize - 4;
         graphics.clear();
         graphics.fillStyle(entity.currentColor);
         graphics.fillRect(x, y, size, size);
-        // Update label position
+        // Update label position (centered in cell, small font)
         if (entity.label) {
-            entity.label.setPosition(x + 2, y + 2);
+            entity.label.setPosition(x + 1, y + 3);
+            entity.label.setFontSize(7);
         }
     }
     drawPlayer() {
@@ -311,7 +330,7 @@ export default class ExplorationScene extends Phaser.Scene {
         this.playerGraphics.clear();
         // Use visual position for smooth animation
         const x = this.padding + this.playerVisualX * this.cellSize;
-        const y = this.padding + this.playerVisualY * this.cellSize;
+        const y = this.hudHeight + this.padding + this.playerVisualY * this.cellSize;
         const size = this.cellSize;
         // Border
         this.playerGraphics.lineStyle(2, 0xffffff);
@@ -319,8 +338,9 @@ export default class ExplorationScene extends Phaser.Scene {
         // Fill
         this.playerGraphics.fillStyle(0x00ff00);
         this.playerGraphics.fillRect(x + 2, y + 2, size - 4, size - 4);
-        // Update label position
-        this.playerLabel.setPosition(x + 8, y + 15);
+        // Update label position (small, inside cell)
+        this.playerLabel.setPosition(x + 3, y + 4);
+        this.playerLabel.setFontSize(7);
     }
     animatePlayerMove(newX, newY) {
         if (this.playerTween) {
@@ -362,8 +382,33 @@ export default class ExplorationScene extends Phaser.Scene {
         // Reset blend progress to start the animation
         entity.blendProgress = 0;
     }
+    updateEmotionFromColor(entity) {
+        // Map color to emotion and update behavior
+        const colorToEmotion = {
+            0x00ff00: 'happy', // green = player's happy emotion
+            0x0000ff: 'sad', // blue
+            0xffff00: 'neutral', // yellow
+            0xff0000: 'angry', // red
+            0x800080: 'curious', // purple
+            0xff8000: 'excited', // orange
+        };
+        const newEmotion = colorToEmotion[entity.currentColor] || entity.emotion;
+        entity.emotion = newEmotion;
+        // Update need label to match new emotion
+        const emotionToNeed = {
+            happy: 'REST',
+            sad: 'FLEE',
+            neutral: 'ROAM',
+            angry: 'SEEK',
+            curious: 'EXPLORE',
+            excited: 'VISIT',
+        };
+        entity.need = emotionToNeed[newEmotion] || entity.need;
+    }
     getBehaviorMove(entity) {
         switch (entity.emotion) {
+            case 'happy':
+                return { x: entity.x, y: entity.y }; // Stay still
             case 'sad':
                 return this.behaviorSad(entity);
             case 'neutral':

@@ -24,7 +24,8 @@ export default class ExplorationScene extends Phaser.Scene {
   private gridWidth = 20;
   private gridHeight = 20;
   private cellSize = 20;
-  private padding = 10;
+  private padding = 5;
+  private hudHeight = 50;
   private moveInterval = 0.25;
   private playerColor = 0x00ff00;
   private blendDuration = 2.0;
@@ -87,8 +88,8 @@ export default class ExplorationScene extends Phaser.Scene {
     this.playerLabel.setDepth(10);
     this.drawPlayer();
 
-    // Create HUD text
-    this.hudText = this.add.text(10, 10, '', { font: '14px Arial', color: '#ffffff' });
+    // Create HUD text (above grid)
+    this.hudText = this.add.text(5, 5, '', { font: '12px Arial', color: '#ffffff' });
     this.hudText.setDepth(100);
 
     // Setup input
@@ -135,15 +136,18 @@ export default class ExplorationScene extends Phaser.Scene {
         if (entity.currentColor !== 0x00ff00) {
           const move = this.getBehaviorMove(entity);
           if (move) {
-            entity.x = move.x;
-            entity.y = move.y;
-
-            // Check entity-to-entity collisions (touching triggers blend)
-            const otherEntity = this.entities.find(
-              e => e !== entity && e.x === entity.x && e.y === entity.y
+            // Check if destination is occupied by another entity
+            const occupiedByEntity = this.entities.find(
+              e => e !== entity && e.x === move.x && e.y === move.y
             );
-            if (otherEntity) {
-              this.blendEntityTowards(otherEntity, entity.currentColor);
+
+            if (occupiedByEntity) {
+              // Can't move there, but trigger blend collision
+              this.blendEntityTowards(occupiedByEntity, entity.currentColor);
+            } else {
+              // Move to empty cell
+              entity.x = move.x;
+              entity.y = move.y;
             }
           }
         }
@@ -219,16 +223,18 @@ export default class ExplorationScene extends Phaser.Scene {
     this.gridGraphics.clear();
     this.gridGraphics.lineStyle(1, 0x808080);
 
+    const gridStartY = this.hudHeight;
+
     // Vertical lines
     for (let x = 0; x <= this.gridWidth; x++) {
       const xPos = this.padding + x * this.cellSize;
-      this.gridGraphics.moveTo(xPos, this.padding);
-      this.gridGraphics.lineTo(xPos, this.padding + this.gridHeight * this.cellSize);
+      this.gridGraphics.moveTo(xPos, gridStartY + this.padding);
+      this.gridGraphics.lineTo(xPos, gridStartY + this.padding + this.gridHeight * this.cellSize);
     }
 
     // Horizontal lines
     for (let y = 0; y <= this.gridHeight; y++) {
-      const yPos = this.padding + y * this.cellSize;
+      const yPos = gridStartY + this.padding + y * this.cellSize;
       this.gridGraphics.moveTo(this.padding, yPos);
       this.gridGraphics.lineTo(this.padding + this.gridWidth * this.cellSize, yPos);
     }
@@ -238,16 +244,17 @@ export default class ExplorationScene extends Phaser.Scene {
 
   private drawEntity(graphics: Phaser.GameObjects.Graphics, entity: Entity) {
     const x = this.padding + entity.visualX * this.cellSize + 2;
-    const y = this.padding + entity.visualY * this.cellSize + 2;
+    const y = this.hudHeight + this.padding + entity.visualY * this.cellSize + 2;
     const size = this.cellSize - 4;
 
     graphics.clear();
     graphics.fillStyle(entity.currentColor);
     graphics.fillRect(x, y, size, size);
 
-    // Update label position
+    // Update label position (centered in cell, small font)
     if (entity.label) {
-      entity.label.setPosition(x + 2, y + 2);
+      entity.label.setPosition(x + 1, y + 3);
+      entity.label.setFontSize(7);
     }
   }
 
@@ -258,7 +265,7 @@ export default class ExplorationScene extends Phaser.Scene {
 
     // Use visual position for smooth animation
     const x = this.padding + this.playerVisualX * this.cellSize;
-    const y = this.padding + this.playerVisualY * this.cellSize;
+    const y = this.hudHeight + this.padding + this.playerVisualY * this.cellSize;
     const size = this.cellSize;
 
     // Border
@@ -269,8 +276,9 @@ export default class ExplorationScene extends Phaser.Scene {
     this.playerGraphics.fillStyle(0x00ff00);
     this.playerGraphics.fillRect(x + 2, y + 2, size - 4, size - 4);
 
-    // Update label position
-    this.playerLabel.setPosition(x + 8, y + 15);
+    // Update label position (small, inside cell)
+    this.playerLabel.setPosition(x + 3, y + 4);
+    this.playerLabel.setFontSize(7);
   }
 
   private animatePlayerMove(newX: number, newY: number) {
