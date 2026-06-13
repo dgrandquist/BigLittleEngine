@@ -58,7 +58,7 @@ export default class ExplorationScene extends Phaser.Scene {
     excited: 0,
     happy: 0,
   };
-  private tallyGraphics?: Phaser.GameObjects.Graphics;
+  private tallyTexts: { [key: string]: Phaser.GameObjects.Text } = {};
 
   private playerGridX = 5;
   private playerGridY = 5;
@@ -123,8 +123,34 @@ export default class ExplorationScene extends Phaser.Scene {
     this.hudText.setDepth(100);
 
     // Create death tally display (right of grid)
-    this.tallyGraphics = this.add.graphics();
-    this.tallyGraphics.setDepth(100);
+    const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
+    const tallyY = this.hudHeight + 10;
+    const lineHeight = 14;
+
+    const emotionColors: { [key: string]: number } = {
+      sad: 0x0000ff,
+      neutral: 0xffff00,
+      angry: 0xff0000,
+      curious: 0x800080,
+      excited: 0xff8000,
+      happy: 0x00ff00,
+    };
+
+    // Create header
+    this.tallyTexts['header'] = this.add.text(tallyX, tallyY, 'Deaths:', { font: '11px Arial', color: '#888888' });
+    this.tallyTexts['header'].setDepth(100);
+
+    // Create text for each emotion
+    const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited', 'happy'];
+    emotions.forEach((emotion, index) => {
+      const hexColor = emotionColors[emotion].toString(16).padStart(6, '0');
+      const text = this.add.text(tallyX, tallyY + (index + 1) * lineHeight, `${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: 0`, {
+        font: '11px Arial',
+        color: `#${hexColor}`,
+      });
+      text.setDepth(100);
+      this.tallyTexts[emotion] = text;
+    });
 
     // Setup input
     this.cursors = this.input.keyboard?.createCursorKeys();
@@ -776,37 +802,13 @@ export default class ExplorationScene extends Phaser.Scene {
   }
 
   private drawDeathTally(): void {
-    if (!this.tallyGraphics) return;
-
-    const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
-    const tallyY = this.hudHeight + 10;
-    const lineHeight = 14;
-
-    const emotionColors: { [key: string]: number } = {
-      sad: 0x0000ff,
-      neutral: 0xffff00,
-      angry: 0xff0000,
-      curious: 0x800080,
-      excited: 0xff8000,
-      happy: 0x00ff00,
-    };
-
+    // Update existing text objects with current death counts
     const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited', 'happy'];
-
-    // Draw header
-    let y = tallyY;
-    this.add.text(tallyX, y, 'Deaths:', { font: '11px Arial', color: '#888888' }).setDepth(100);
-    y += lineHeight;
-
-    // Draw each emotion with its color
     emotions.forEach((emotion) => {
-      const count = this.deathTally[emotion];
-      const hexColor = emotionColors[emotion].toString(16).padStart(6, '0');
-      this.add.text(tallyX, y, `${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${count}`, {
-        font: '11px Arial',
-        color: `#${hexColor}`,
-      }).setDepth(100);
-      y += lineHeight;
+      if (this.tallyTexts[emotion]) {
+        const count = this.deathTally[emotion];
+        this.tallyTexts[emotion].setText(`${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${count}`);
+      }
     });
   }
 }
