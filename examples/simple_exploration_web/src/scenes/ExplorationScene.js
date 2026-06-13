@@ -75,6 +75,12 @@ export default class ExplorationScene extends Phaser.Scene {
                 happy: 0,
             }
         });
+        Object.defineProperty(this, "tallyTexts", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: {}
+        });
         Object.defineProperty(this, "tallyGraphics", {
             enumerable: true,
             configurable: true,
@@ -187,11 +193,11 @@ export default class ExplorationScene extends Phaser.Scene {
     create() {
         // Initialize entities (spread across larger 20x20 grid)
         this.entities = [
-            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0000ff, currentColor: 0x0000ff, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0000ff, blendTargetColor: 0x0000ff, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
-            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0xffff00, currentColor: 0xffff00, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0xffff00, blendTargetColor: 0xffff00, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
-            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xff0000, currentColor: 0xff0000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xff0000, blendTargetColor: 0xff0000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
-            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x800080, currentColor: 0x800080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x800080, blendTargetColor: 0x800080, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
-            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0xff8000, currentColor: 0xff8000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0xff8000, blendTargetColor: 0xff8000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0040a0, currentColor: 0x0040a0, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0040a0, blendTargetColor: 0x0040a0, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 18, y: 3, visualX: 18, visualY: 3, originalColor: 0x808000, currentColor: 0x808000, emotion: 'neutral', need: 'ROAM', blendProgress: -1, blendStartColor: 0x808000, blendTargetColor: 0x808000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 5, y: 15, visualX: 5, visualY: 15, originalColor: 0xa00000, currentColor: 0xa00000, emotion: 'angry', need: 'SEEK', blendProgress: -1, blendStartColor: 0xa00000, blendTargetColor: 0xa00000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 15, y: 10, visualX: 15, visualY: 10, originalColor: 0x604080, currentColor: 0x604080, emotion: 'curious', need: 'EXPLORE', blendProgress: -1, blendStartColor: 0x604080, blendTargetColor: 0x604080, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
+            { x: 10, y: 18, visualX: 10, visualY: 18, originalColor: 0x804000, currentColor: 0x804000, emotion: 'excited', need: 'VISIT', blendProgress: -1, blendStartColor: 0x804000, blendTargetColor: 0x804000, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
         ];
         // Draw grid
         this.gridGraphics = this.add.graphics();
@@ -215,8 +221,34 @@ export default class ExplorationScene extends Phaser.Scene {
         this.hudText = this.add.text(5, 5, '', { font: '12px Arial', color: '#ffffff' });
         this.hudText.setDepth(100);
         // Create death tally display (right of grid)
+        const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
+        const tallyY = this.hudHeight + 10;
+        const lineHeight = 16;
+        const boxPadding = 2;
+        const emotionColors = {
+            sad: 0x0040a0,
+            neutral: 0x808000,
+            angry: 0xa00000,
+            curious: 0x604080,
+            excited: 0x804000,
+            happy: 0x00a000,
+        };
+        // Create graphics for backgrounds
         this.tallyGraphics = this.add.graphics();
-        this.tallyGraphics.setDepth(100);
+        this.tallyGraphics.setDepth(99);
+        // Create header
+        this.tallyTexts['header'] = this.add.text(tallyX, tallyY, 'Deaths:', { font: '11px Arial', color: '#888888' });
+        this.tallyTexts['header'].setDepth(100);
+        // Create text for each emotion with background
+        const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited', 'happy'];
+        emotions.forEach((emotion, index) => {
+            const text = this.add.text(tallyX + boxPadding, tallyY + (index + 1) * lineHeight + boxPadding, `${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: 0`, {
+                font: '11px Arial',
+                color: '#ffffff',
+            });
+            text.setDepth(100);
+            this.tallyTexts[emotion] = text;
+        });
         // Setup input
         this.cursors = this.input.keyboard?.createCursorKeys();
     }
@@ -657,11 +689,11 @@ export default class ExplorationScene extends Phaser.Scene {
         const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited'];
         const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
         const emotionToColor = {
-            sad: 0x0000ff,
-            neutral: 0xffff00,
-            angry: 0xff0000,
-            curious: 0x800080,
-            excited: 0xff8000,
+            sad: 0x0040a0,
+            neutral: 0x808000,
+            angry: 0xa00000,
+            curious: 0x604080,
+            excited: 0x804000,
         };
         const growing = {
             x: targetX,
@@ -785,29 +817,30 @@ export default class ExplorationScene extends Phaser.Scene {
             return;
         const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
         const tallyY = this.hudHeight + 10;
-        const lineHeight = 14;
+        const lineHeight = 16;
+        const boxPadding = 2;
+        const boxWidth = 95;
+        const boxHeight = 12;
         const emotionColors = {
-            sad: 0x0000ff,
-            neutral: 0xffff00,
-            angry: 0xff0000,
-            curious: 0x800080,
-            excited: 0xff8000,
-            happy: 0x00ff00,
+            sad: 0x0040a0,
+            neutral: 0x808000,
+            angry: 0xa00000,
+            curious: 0x604080,
+            excited: 0x804000,
+            happy: 0x00a000,
         };
+        // Clear and redraw backgrounds
+        this.tallyGraphics.clear();
         const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited', 'happy'];
-        // Draw header
-        let y = tallyY;
-        this.add.text(tallyX, y, 'Deaths:', { font: '11px Arial', color: '#888888' }).setDepth(100);
-        y += lineHeight;
-        // Draw each emotion with its color
-        emotions.forEach((emotion) => {
-            const count = this.deathTally[emotion];
-            const hexColor = emotionColors[emotion].toString(16).padStart(6, '0');
-            this.add.text(tallyX, y, `${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${count}`, {
-                font: '11px Arial',
-                color: `#${hexColor}`,
-            }).setDepth(100);
-            y += lineHeight;
+        emotions.forEach((emotion, index) => {
+            // Draw colored background
+            this.tallyGraphics.fillStyle(emotionColors[emotion]);
+            this.tallyGraphics.fillRect(tallyX, tallyY + (index + 1) * lineHeight, boxWidth, boxHeight);
+            // Update text with current death count
+            if (this.tallyTexts[emotion]) {
+                const count = this.deathTally[emotion];
+                this.tallyTexts[emotion].setText(`${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${count}`);
+            }
         });
     }
 }
