@@ -189,6 +189,18 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: void 0
         });
+        Object.defineProperty(this, "overlapFrameCount", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: 0
+        });
+        Object.defineProperty(this, "lastOverlapLog", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: ''
+        });
     }
     create() {
         // Calculate dynamic cell size based on window size
@@ -838,6 +850,9 @@ export default class ExplorationScene extends Phaser.Scene {
     }
     debugScanForOverlaps() {
         const cellOccupancy = {};
+        // Include player
+        const playerKey = `${this.playerGridX},${this.playerGridY}`;
+        cellOccupancy[playerKey] = { entities: ['[PLAYER]'], growing: [], dying: [] };
         // Scan all full entities
         this.entities.forEach((entity, entityIndex) => {
             const key = `${entity.x},${entity.y}`;
@@ -845,34 +860,44 @@ export default class ExplorationScene extends Phaser.Scene {
                 cellOccupancy[key] = { entities: [], growing: [], dying: [] };
             }
             const emotion = this.getEmotionFromColor(entity.currentColor);
-            const status = entity.isDying ? `dying(${(entity.deathProgress * 100).toFixed(0)}%)` : `living`;
-            cellOccupancy[key].entities.push(`[${entityIndex}:${emotion}:${status}]`);
+            const blendStatus = entity.blendProgress >= 0 && entity.blendProgress < 1 ? `:blend${(entity.blendProgress * 100).toFixed(0)}%` : '';
+            const status = entity.isDying ? `dying(${(entity.deathProgress * 100).toFixed(0)}%)` : `living${blendStatus}`;
+            cellOccupancy[key].entities.push(`[E${entityIndex}:${emotion}:${status}]`);
         });
         // Scan all growing squares
-        this.entities.forEach((entity) => {
+        this.entities.forEach((entity, entityIndex) => {
             if (entity.growingSquares) {
                 entity.growingSquares.forEach((growing, growIndex) => {
                     const key = `${growing.x},${growing.y}`;
                     if (!cellOccupancy[key]) {
                         cellOccupancy[key] = { entities: [], growing: [], dying: [] };
                     }
-                    cellOccupancy[key].growing.push(`[${growing.emotion}:${(growing.growthProgress * 100).toFixed(0)}%]`);
+                    cellOccupancy[key].growing.push(`[G${entityIndex}:${growing.emotion}:${(growing.growthProgress * 100).toFixed(0)}%]`);
                 });
             }
         });
         // Check for overlaps
         let hasOverlaps = false;
+        let overlapLog = '';
         Object.entries(cellOccupancy).forEach(([key, occupancy]) => {
             const totalOccupants = occupancy.entities.length + occupancy.growing.length;
             if (totalOccupants > 1) {
-                if (!hasOverlaps) {
-                    console.warn('GRID OVERLAP DETECTED:');
-                    hasOverlaps = true;
-                }
-                console.warn(`Cell ${key}: ${occupancy.entities.length} entity(ies) ${occupancy.entities.join('')} + ` +
-                    `${occupancy.growing.length} growing ${occupancy.growing.join('')}`);
+                hasOverlaps = true;
+                overlapLog += `\n  Cell ${key}: ${occupancy.entities.join(' ')} + ${occupancy.growing.join(' ')}`;
             }
         });
+        if (hasOverlaps) {
+            this.overlapFrameCount++;
+            if (this.overlapFrameCount % 10 === 1) { // Log every 10th frame to avoid spam
+                console.warn(`⚠️ OVERLAP FRAME #${this.overlapFrameCount}:${overlapLog}`);
+            }
+        }
+        else {
+            if (this.overlapFrameCount > 0) {
+                console.log(`✓ Overlap cleared after ${this.overlapFrameCount} frames`);
+                this.overlapFrameCount = 0;
+            }
+        }
     }
     getEmotionFromColor(color) {
         const emotionColors = {
