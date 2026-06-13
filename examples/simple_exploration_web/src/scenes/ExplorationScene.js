@@ -800,6 +800,21 @@ export default class ExplorationScene extends Phaser.Scene {
         }
     }
     spawnFullyGrownEntity(growing) {
+        // Check if spawn location is occupied before spawning
+        const isOccupied = this.playerGridX === growing.x && this.playerGridY === growing.y ||
+            this.entities.some(e => e.x === growing.x && e.y === growing.y) ||
+            this.entities.some(e => e.growingSquares?.some(g => g.x === growing.x && g.y === growing.y));
+        if (isOccupied) {
+            console.warn(`⚠️ Cannot spawn entity at (${growing.x},${growing.y}) - cell occupied`);
+            // Clean up growing square without spawning
+            if (growing.graphics) {
+                growing.graphics.destroy();
+            }
+            if (growing.label) {
+                growing.label.destroy();
+            }
+            return;
+        }
         const emotionToNeed = {
             happy: 'REST',
             sad: 'FLEE',
