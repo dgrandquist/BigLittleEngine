@@ -201,6 +201,12 @@ export default class ExplorationScene extends Phaser.Scene {
             writable: true,
             value: ''
         });
+        Object.defineProperty(this, "previousCellStates", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: {}
+        });
     }
     create() {
         // Calculate dynamic cell size based on window size
@@ -716,9 +722,9 @@ export default class ExplorationScene extends Phaser.Scene {
             targetY = Math.floor(Math.random() * this.gridHeight);
             attempts++;
         } while (attempts < 10 &&
-            (this.entities.some(e => e.x === targetX && e.y === targetY) ||
-                this.entities.some(e => e.growingSquares?.some(g => g.x === targetX && g.y === targetY)) ||
-                this.entities.some(e => e.x === targetX && e.y === targetY && e.isDying)));
+            (this.playerGridX === targetX && this.playerGridY === targetY ||
+                this.entities.some(e => e.x === targetX && e.y === targetY) ||
+                this.entities.some(e => e.growingSquares?.some(g => g.x === targetX && g.y === targetY))));
         if (attempts >= 10)
             return; // Couldn't find empty cell
         // Pick random emotion for new square
@@ -850,14 +856,11 @@ export default class ExplorationScene extends Phaser.Scene {
     }
     debugScanForOverlaps() {
         const cellOccupancy = {};
-        // Include player
-        const playerKey = `${this.playerGridX},${this.playerGridY}`;
-        cellOccupancy[playerKey] = { entities: ['[PLAYER]'], growing: [], dying: [] };
         // Scan all full entities
         this.entities.forEach((entity, entityIndex) => {
             const key = `${entity.x},${entity.y}`;
             if (!cellOccupancy[key]) {
-                cellOccupancy[key] = { entities: [], growing: [], dying: [] };
+                cellOccupancy[key] = { entities: [], growing: [] };
             }
             const emotion = this.getEmotionFromColor(entity.currentColor);
             const blendStatus = entity.blendProgress >= 0 && entity.blendProgress < 1 ? `:blend${(entity.blendProgress * 100).toFixed(0)}%` : '';
@@ -867,37 +870,59 @@ export default class ExplorationScene extends Phaser.Scene {
         // Scan all growing squares
         this.entities.forEach((entity, entityIndex) => {
             if (entity.growingSquares) {
-                entity.growingSquares.forEach((growing, growIndex) => {
+                entity.growingSquares.forEach((growing) => {
                     const key = `${growing.x},${growing.y}`;
                     if (!cellOccupancy[key]) {
-                        cellOccupancy[key] = { entities: [], growing: [], dying: [] };
+                        cellOccupancy[key] = { entities: [], growing: [] };
                     }
                     cellOccupancy[key].growing.push(`[G${entityIndex}:${growing.emotion}:${(growing.growthProgress * 100).toFixed(0)}%]`);
                 });
             }
         });
-        // Check for overlaps
+        // Check for overlaps and detect new ones
         let hasOverlaps = false;
-        let overlapLog = '';
+        let newOverlaps = [];
         Object.entries(cellOccupancy).forEach(([key, occupancy]) => {
             const totalOccupants = occupancy.entities.length + occupancy.growing.length;
             if (totalOccupants > 1) {
                 hasOverlaps = true;
-                overlapLog += `\n  Cell ${key}: ${occupancy.entities.join(' ')} + ${occupancy.growing.join(' ')}`;
+                const occupancyStr = `${occupancy.entities.join(',')}+${occupancy.growing.join(',')}`;
+                const prevStr = this.previousCellStates[key];
+                // Detect NEW overlaps
+                if (prevStr !== occupancyStr) {
+                    newOverlaps.push(`Cell ${key}: ${occupancy.entities.join(' ')} + ${occupancy.growing.join(' ')}`);
+                }
             }
         });
+        // Log new overlaps immediately (unsampled) for diagnosis
+        if (newOverlaps.length > 0) {
+            console.error(`🔴 NEW OVERLAP(S) DETECTED:\n  ${newOverlaps.join('\n  ')}`);
+        }
+        // Log ongoing overlaps (sampled to avoid spam)
         if (hasOverlaps) {
             this.overlapFrameCount++;
-            if (this.overlapFrameCount % 10 === 1) { // Log every 10th frame to avoid spam
-                console.warn(`⚠️ OVERLAP FRAME #${this.overlapFrameCount}:${overlapLog}`);
+            if (this.overlapFrameCount % 20 === 1) {
+                const ongoingCells = Object.entries(cellOccupancy)
+                    .filter(([_, occ]) => occ.entities.length + occ.growing.length > 1)
+                    .map(([key, occ]) => `Cell ${key}: ${occ.entities.join(' ')} ${occ.growing.join(' ')}`)
+                    .join('\n  ');
+                console.warn(`⚠️ OVERLAPS ONGOING (${this.overlapFrameCount} frames):\n  ${ongoingCells}`);
             }
         }
         else {
             if (this.overlapFrameCount > 0) {
-                console.log(`✓ Overlap cleared after ${this.overlapFrameCount} frames`);
+                console.log(`✓ All overlaps cleared (lasted ${this.overlapFrameCount} frames)`);
                 this.overlapFrameCount = 0;
             }
         }
+        // Store current state for next frame comparison
+        this.previousCellStates = {};
+        Object.entries(cellOccupancy).forEach(([key, occupancy]) => {
+            const total = occupancy.entities.length + occupancy.growing.length;
+            if (total > 1) {
+                this.previousCellStates[key] = `${occupancy.entities.join(',')}+${occupancy.growing.join(',')}`;
+            }
+        });
     }
     getEmotionFromColor(color) {
         const emotionColors = {
