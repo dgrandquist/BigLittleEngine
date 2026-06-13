@@ -681,7 +681,8 @@ export default class ExplorationScene extends Phaser.Scene {
     } while (
       attempts < 10 &&
       (this.entities.some(e => e.x === targetX && e.y === targetY) ||
-       this.entities.some(e => e.growingSquares?.some(g => g.x === targetX && g.y === targetY)))
+       this.entities.some(e => e.growingSquares?.some(g => g.x === targetX && g.y === targetY)) ||
+       this.entities.some(e => e.x === targetX && e.y === targetY && e.isDying))
     );
 
     if (attempts >= 10) return; // Couldn't find empty cell
