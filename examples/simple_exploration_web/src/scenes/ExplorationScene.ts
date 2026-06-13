@@ -291,6 +291,7 @@ export default class ExplorationScene extends Phaser.Scene {
           entity.isDying = true;
           entity.deathProgress = 0;
           this.deathTally[entity.emotion]++;
+          console.warn(`💀 ${entity.emotion} entity at (${entity.x},${entity.y}) died from being stuck for ${entity.stuckTimer.toFixed(1)}s`);
         }
       } else {
         entity.stuckTimer = 0;
@@ -832,6 +833,9 @@ export default class ExplorationScene extends Phaser.Scene {
     newEntity.label = label;
 
     this.entities.push(newEntity);
+
+    // Log spawn for debugging
+    console.log(`✓ Spawned new ${newEntity.emotion} entity at (${newEntity.x},${newEntity.y}), stuckTimer=${newEntity.stuckTimer}`);
 
     // Clean up growing square graphics
     if (growing.graphics) {
