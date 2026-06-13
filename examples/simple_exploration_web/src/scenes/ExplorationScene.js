@@ -54,7 +54,7 @@ export default class ExplorationScene extends Phaser.Scene {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 30.0
+            value: 15.0
         });
         Object.defineProperty(this, "deathDuration", {
             enumerable: true,

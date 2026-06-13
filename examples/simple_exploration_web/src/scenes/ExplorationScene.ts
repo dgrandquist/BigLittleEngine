@@ -48,7 +48,7 @@ export default class ExplorationScene extends Phaser.Scene {
   private moveInterval = 0.25;
   private playerColor = 0x00ff00;
   private blendDuration = 2.0;
-  private stuckTimeLimit = 30.0;
+  private stuckTimeLimit = 15.0;
   private deathDuration = 2.0;
   private deathTally: { [key: string]: number } = {
     sad: 0,
