@@ -75,7 +75,7 @@ export default class ExplorationScene extends Phaser.Scene {
                 happy: 0,
             }
         });
-        Object.defineProperty(this, "tallyText", {
+        Object.defineProperty(this, "tallyGraphics", {
             enumerable: true,
             configurable: true,
             writable: true,
@@ -215,9 +215,8 @@ export default class ExplorationScene extends Phaser.Scene {
         this.hudText = this.add.text(5, 5, '', { font: '12px Arial', color: '#ffffff' });
         this.hudText.setDepth(100);
         // Create death tally display (right of grid)
-        const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
-        this.tallyText = this.add.text(tallyX, this.hudHeight + 10, '', { font: '11px Arial', color: '#888888' });
-        this.tallyText.setDepth(100);
+        this.tallyGraphics = this.add.graphics();
+        this.tallyGraphics.setDepth(100);
         // Setup input
         this.cursors = this.input.keyboard?.createCursorKeys();
     }
@@ -398,19 +397,8 @@ export default class ExplorationScene extends Phaser.Scene {
         const inputStr = this.lastInput || 'none';
         const hudContent = `FPS: ${Math.round(this.currentFps)} | Position: (${this.playerGridX}, ${this.playerGridY}) | Next move in: ${timeUntilNext.toFixed(2)}s | Input: ${inputStr}`;
         this.hudText?.setText(hudContent);
-        // Update death tally display
-        if (this.tallyText) {
-            const tallyLines = [
-                'Deaths:',
-                `Sad: ${this.deathTally.sad}`,
-                `Neutral: ${this.deathTally.neutral}`,
-                `Angry: ${this.deathTally.angry}`,
-                `Curious: ${this.deathTally.curious}`,
-                `Excited: ${this.deathTally.excited}`,
-                `Happy: ${this.deathTally.happy}`,
-            ];
-            this.tallyText.setText(tallyLines.join('\n'));
-        }
+        // Update death tally display with colors
+        this.drawDeathTally();
     }
     drawGrid() {
         if (!this.gridGraphics)
@@ -791,5 +779,35 @@ export default class ExplorationScene extends Phaser.Scene {
         // Fade out as it shrinks
         graphics.fillStyle(entity.currentColor, sizeProgress);
         graphics.fillRect(x, y, size, size);
+    }
+    drawDeathTally() {
+        if (!this.tallyGraphics)
+            return;
+        const tallyX = this.padding + this.gridWidth * this.cellSize + 10;
+        const tallyY = this.hudHeight + 10;
+        const lineHeight = 14;
+        const emotionColors = {
+            sad: 0x0000ff,
+            neutral: 0xffff00,
+            angry: 0xff0000,
+            curious: 0x800080,
+            excited: 0xff8000,
+            happy: 0x00ff00,
+        };
+        const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited', 'happy'];
+        // Draw header
+        let y = tallyY;
+        this.add.text(tallyX, y, 'Deaths:', { font: '11px Arial', color: '#888888' }).setDepth(100);
+        y += lineHeight;
+        // Draw each emotion with its color
+        emotions.forEach((emotion) => {
+            const count = this.deathTally[emotion];
+            const hexColor = emotionColors[emotion].toString(16).padStart(6, '0');
+            this.add.text(tallyX, y, `${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${count}`, {
+                font: '11px Arial',
+                color: `#${hexColor}`,
+            }).setDepth(100);
+            y += lineHeight;
+        });
     }
 }
