@@ -831,8 +831,10 @@ export default class ExplorationScene extends Phaser.Scene {
     const emotions = ['sad', 'neutral', 'angry', 'curious', 'excited', 'happy'];
     emotions.forEach((emotion, index) => {
       // Draw colored background
-      this.tallyGraphics.fillStyle(emotionColors[emotion]);
-      this.tallyGraphics.fillRect(tallyX, tallyY + (index + 1) * lineHeight, boxWidth, boxHeight);
+      if (this.tallyGraphics) {
+        this.tallyGraphics.fillStyle(emotionColors[emotion]);
+        this.tallyGraphics.fillRect(tallyX, tallyY + (index + 1) * lineHeight, boxWidth, boxHeight);
+      }
 
       // Update text with current death count
       if (this.tallyTexts[emotion]) {
