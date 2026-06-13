@@ -49,7 +49,7 @@ export default class ExplorationScene extends Phaser.Scene {
   private playerColor = 0x00ff00;
   private blendDuration = 2.0;
   private stuckTimeLimit = 30.0;
-  private deathDuration = 1.0;
+  private deathDuration = 2.0;
   private deathTally: { [key: string]: number } = {
     sad: 0,
     neutral: 0,
@@ -88,6 +88,19 @@ export default class ExplorationScene extends Phaser.Scene {
   }
 
   create() {
+    // Calculate dynamic cell size based on window size
+    const gameWidth = this.game.canvas.width;
+    const gameHeight = this.game.canvas.height;
+    const hudReserve = 60; // Space for status line
+    const legendReserve = 120; // Space for legend on the right
+    const availableWidth = gameWidth - this.padding * 2 - legendReserve;
+    const availableHeight = gameHeight - hudReserve - this.padding * 2;
+
+    // Fit grid to available space
+    const cellSizeX = Math.floor(availableWidth / this.gridWidth);
+    const cellSizeY = Math.floor(availableHeight / this.gridHeight);
+    this.cellSize = Math.min(cellSizeX, cellSizeY, 40); // Cap at 40px for readability
+
     // Initialize entities (spread across larger 20x20 grid)
     this.entities = [
       { x: 2, y: 2, visualX: 2, visualY: 2, originalColor: 0x0040a0, currentColor: 0x0040a0, emotion: 'sad', need: 'FLEE', blendProgress: -1, blendStartColor: 0x0040a0, blendTargetColor: 0x0040a0, blendDuration: this.blendDuration, moveTimer: 0, stuckTimer: 0, deathProgress: 0, isDying: false, growingSquares: [] },
@@ -252,7 +265,11 @@ export default class ExplorationScene extends Phaser.Scene {
               e => e.growingSquares?.some(g => g.x === move.x && g.y === move.y)
             );
 
-            if (occupiedByPlayer || occupiedByEntity || occupiedByGrowing) {
+            const occupiedByDying = this.entities.some(
+              e => e.x === move.x && e.y === move.y && e.isDying
+            );
+
+            if (occupiedByPlayer || occupiedByEntity || occupiedByGrowing || occupiedByDying) {
               // Can't move there, but trigger blend collision if entity
               if (occupiedByEntity) {
                 this.blendEntityTowards(occupiedByEntity, entity.currentColor);
@@ -320,12 +337,20 @@ export default class ExplorationScene extends Phaser.Scene {
       const newX = Math.max(0, Math.min(this.gridWidth - 1, this.playerGridX + moveDirection.dx));
       const newY = Math.max(0, Math.min(this.gridHeight - 1, this.playerGridY + moveDirection.dy));
 
-      // Check if square is occupied by an entity
-      const touchedEntity = this.entities.find(e => e.x === newX && e.y === newY);
+      // Check if square is occupied by a full entity
+      const touchedEntity = this.entities.find(e => e.x === newX && e.y === newY && !e.isDying);
 
-      if (touchedEntity) {
-        // Start blend on touched entity (from current color to player color)
-        this.startEntityBlend(touchedEntity);
+      // Check if destination has a growing square
+      const hasGrowingSquare = this.entities.some(e => e.growingSquares?.some(g => g.x === newX && g.y === newY));
+
+      // Check if destination has a dying square
+      const hasDyingSquare = this.entities.some(e => e.x === newX && e.y === newY && e.isDying);
+
+      if (touchedEntity || hasGrowingSquare || hasDyingSquare) {
+        // Can't move there, but trigger blend if there's a full entity
+        if (touchedEntity) {
+          this.startEntityBlend(touchedEntity);
+        }
         // Don't reset timer - let player try a different direction immediately
       } else {
         // Move only if not occupied

@@ -6,11 +6,12 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: 'game',
   backgroundColor: '#000000',
   scale: {
-    mode: Phaser.Scale.EXPAND,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
     width: window.innerWidth,
     height: window.innerHeight,
     expandParent: true,
+    fullscreenTarget: 'parent',
   },
   physics: {
     default: 'arcade',
@@ -19,6 +20,10 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   scene: [ExplorationScene],
+  render: {
+    pixelArt: false,
+    antialias: true,
+  },
 };
 
 const game = new Phaser.Game(config);
