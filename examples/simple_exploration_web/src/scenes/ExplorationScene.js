@@ -863,5 +863,75 @@ export default class ExplorationScene extends Phaser.Scene {
                 this.tallyTexts[emotion].setText(`${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${count}`);
             }
         });
+        // Count growing, living, and dying squares by emotion
+        const stateCounts = {};
+        emotions.forEach((emotion) => {
+            stateCounts[emotion] = { growing: 0, living: 0, dying: 0 };
+        });
+        let growingCount = 0;
+        let livingCount = 0;
+        let dyingCount = 0;
+        this.entities.forEach((entity) => {
+            const emotionKey = Object.keys(emotionColors).find((key) => emotionColors[key] === entity.currentColor) || 'neutral';
+            if (entity.isDying) {
+                dyingCount++;
+                stateCounts[emotionKey].dying++;
+            }
+            else {
+                livingCount++;
+                stateCounts[emotionKey].living++;
+            }
+            if (entity.growingSquares) {
+                growingCount += entity.growingSquares.length;
+                stateCounts[emotionKey].growing += entity.growingSquares.length;
+            }
+        });
+        // Find dominant emotion for each state
+        const getDominantEmotionColor = (stateKey) => {
+            let maxCount = 0;
+            let dominantEmotion = 'neutral';
+            emotions.forEach((emotion) => {
+                if (stateCounts[emotion][stateKey] > maxCount) {
+                    maxCount = stateCounts[emotion][stateKey];
+                    dominantEmotion = emotion;
+                }
+            });
+            return emotionColors[dominantEmotion];
+        };
+        // Update or create state counts display
+        const stateY = tallyY + (emotions.length + 1) * lineHeight + 10;
+        // Growing count with colored background
+        const growingColor = getDominantEmotionColor('growing');
+        if (this.tallyGraphics) {
+            this.tallyGraphics.fillStyle(growingColor);
+            this.tallyGraphics.fillRect(tallyX, stateY, boxWidth, boxHeight);
+        }
+        if (!this.tallyTexts['growing']) {
+            this.tallyTexts['growing'] = this.add.text(tallyX + 2, stateY, '', { font: '11px Arial', color: '#ffffff' });
+            this.tallyTexts['growing'].setDepth(100);
+        }
+        this.tallyTexts['growing'].setText(`Growing: ${growingCount}`);
+        // Living count with colored background
+        const livingColor = getDominantEmotionColor('living');
+        if (this.tallyGraphics) {
+            this.tallyGraphics.fillStyle(livingColor);
+            this.tallyGraphics.fillRect(tallyX, stateY + lineHeight, boxWidth, boxHeight);
+        }
+        if (!this.tallyTexts['living']) {
+            this.tallyTexts['living'] = this.add.text(tallyX + 2, stateY + lineHeight, '', { font: '11px Arial', color: '#ffffff' });
+            this.tallyTexts['living'].setDepth(100);
+        }
+        this.tallyTexts['living'].setText(`Living: ${livingCount}`);
+        // Dying count with colored background
+        const dyingColor = getDominantEmotionColor('dying');
+        if (this.tallyGraphics) {
+            this.tallyGraphics.fillStyle(dyingColor);
+            this.tallyGraphics.fillRect(tallyX, stateY + lineHeight * 2, boxWidth, boxHeight);
+        }
+        if (!this.tallyTexts['dying']) {
+            this.tallyTexts['dying'] = this.add.text(tallyX + 2, stateY + lineHeight * 2, '', { font: '11px Arial', color: '#ffffff' });
+            this.tallyTexts['dying'].setDepth(100);
+        }
+        this.tallyTexts['dying'].setText(`Dying: ${dyingCount}`);
     }
 }
