@@ -384,7 +384,8 @@ export default class ExplorationScene extends Phaser.Scene {
                 // Update color based on blend progress toward target color
                 entity.currentColor = this.lerpColor(entity.blendStartColor, entity.blendTargetColor, entity.blendProgress);
                 // When blend completes, update emotion to match new color
-                if (entity.blendProgress === 1) {
+                if (entity.blendProgress >= 1) {
+                    entity.currentColor = entity.blendTargetColor;
                     this.updateEmotionFromColor(entity);
                 }
             }
@@ -449,6 +450,8 @@ export default class ExplorationScene extends Phaser.Scene {
         this.hudText?.setText(hudContent);
         // Update death tally display with colors
         this.drawDeathTally();
+        // Debug scan for overlapping cells
+        this.debugScanForOverlaps();
     }
     drawGrid() {
         if (!this.gridGraphics)
@@ -534,12 +537,14 @@ export default class ExplorationScene extends Phaser.Scene {
         this.blendEntityTowards(entity, this.playerColor);
     }
     blendEntityTowards(entity, targetColor) {
-        // Save current color as blend start color
+        // If already blending, blend from current blend position, not from start
         entity.blendStartColor = entity.currentColor;
         // Set the target color for blending
         entity.blendTargetColor = targetColor;
         // Reset blend progress to start the animation
         entity.blendProgress = 0;
+        // Set blend duration
+        entity.blendDuration = this.blendDuration;
     }
     updateEmotionFromColor(entity) {
         // Map color to emotion and update behavior
@@ -831,6 +836,55 @@ export default class ExplorationScene extends Phaser.Scene {
         graphics.fillStyle(entity.currentColor, sizeProgress);
         graphics.fillRect(x, y, size, size);
     }
+    debugScanForOverlaps() {
+        const cellOccupancy = {};
+        // Scan all full entities
+        this.entities.forEach((entity, entityIndex) => {
+            const key = `${entity.x},${entity.y}`;
+            if (!cellOccupancy[key]) {
+                cellOccupancy[key] = { entities: [], growing: [], dying: [] };
+            }
+            const emotion = this.getEmotionFromColor(entity.currentColor);
+            const status = entity.isDying ? `dying(${(entity.deathProgress * 100).toFixed(0)}%)` : `living`;
+            cellOccupancy[key].entities.push(`[${entityIndex}:${emotion}:${status}]`);
+        });
+        // Scan all growing squares
+        this.entities.forEach((entity) => {
+            if (entity.growingSquares) {
+                entity.growingSquares.forEach((growing, growIndex) => {
+                    const key = `${growing.x},${growing.y}`;
+                    if (!cellOccupancy[key]) {
+                        cellOccupancy[key] = { entities: [], growing: [], dying: [] };
+                    }
+                    cellOccupancy[key].growing.push(`[${growing.emotion}:${(growing.growthProgress * 100).toFixed(0)}%]`);
+                });
+            }
+        });
+        // Check for overlaps
+        let hasOverlaps = false;
+        Object.entries(cellOccupancy).forEach(([key, occupancy]) => {
+            const totalOccupants = occupancy.entities.length + occupancy.growing.length;
+            if (totalOccupants > 1) {
+                if (!hasOverlaps) {
+                    console.warn('GRID OVERLAP DETECTED:');
+                    hasOverlaps = true;
+                }
+                console.warn(`Cell ${key}: ${occupancy.entities.length} entity(ies) ${occupancy.entities.join('')} + ` +
+                    `${occupancy.growing.length} growing ${occupancy.growing.join('')}`);
+            }
+        });
+    }
+    getEmotionFromColor(color) {
+        const emotionColors = {
+            sad: 0x0040a0,
+            neutral: 0x808000,
+            angry: 0xa00000,
+            curious: 0x604080,
+            excited: 0x804000,
+            happy: 0x00a000,
+        };
+        return Object.keys(emotionColors).find((key) => emotionColors[key] === color) || 'unknown';
+    }
     drawDeathTally() {
         if (!this.tallyGraphics)
             return;
@@ -868,70 +922,77 @@ export default class ExplorationScene extends Phaser.Scene {
         emotions.forEach((emotion) => {
             stateCounts[emotion] = { growing: 0, living: 0, dying: 0 };
         });
-        let growingCount = 0;
-        let livingCount = 0;
-        let dyingCount = 0;
         this.entities.forEach((entity) => {
             const emotionKey = Object.keys(emotionColors).find((key) => emotionColors[key] === entity.currentColor) || 'neutral';
             if (entity.isDying) {
-                dyingCount++;
                 stateCounts[emotionKey].dying++;
             }
             else {
-                livingCount++;
                 stateCounts[emotionKey].living++;
             }
             if (entity.growingSquares) {
-                growingCount += entity.growingSquares.length;
                 stateCounts[emotionKey].growing += entity.growingSquares.length;
             }
         });
-        // Find dominant emotion for each state
-        const getDominantEmotionColor = (stateKey) => {
-            let maxCount = 0;
-            let dominantEmotion = 'neutral';
-            emotions.forEach((emotion) => {
-                if (stateCounts[emotion][stateKey] > maxCount) {
-                    maxCount = stateCounts[emotion][stateKey];
-                    dominantEmotion = emotion;
-                }
-            });
-            return emotionColors[dominantEmotion];
-        };
-        // Update or create state counts display
-        const stateY = tallyY + (emotions.length + 1) * lineHeight + 10;
-        // Growing count with colored background
-        const growingColor = getDominantEmotionColor('growing');
-        if (this.tallyGraphics) {
-            this.tallyGraphics.fillStyle(growingColor);
-            this.tallyGraphics.fillRect(tallyX, stateY, boxWidth, boxHeight);
+        // Display Growing section
+        let growingY = tallyY + (emotions.length + 1) * lineHeight + 5;
+        if (!this.tallyTexts['growingHeader']) {
+            this.tallyTexts['growingHeader'] = this.add.text(tallyX, growingY, 'Growing', { font: '11px Arial', color: '#ffffff' });
+            this.tallyTexts['growingHeader'].setDepth(100);
         }
-        if (!this.tallyTexts['growing']) {
-            this.tallyTexts['growing'] = this.add.text(tallyX + 2, stateY, '', { font: '11px Arial', color: '#ffffff' });
-            this.tallyTexts['growing'].setDepth(100);
+        this.tallyTexts['growingHeader'].setVisible(true);
+        emotions.forEach((emotion, index) => {
+            const yPos = growingY + (index + 1) * lineHeight;
+            if (this.tallyGraphics) {
+                this.tallyGraphics.fillStyle(emotionColors[emotion]);
+                this.tallyGraphics.fillRect(tallyX, yPos, boxWidth, boxHeight);
+            }
+            const textKey = `growing_${emotion}`;
+            if (!this.tallyTexts[textKey]) {
+                this.tallyTexts[textKey] = this.add.text(tallyX + boxPadding, yPos + boxPadding, '', { font: '11px Arial', color: '#ffffff' });
+                this.tallyTexts[textKey].setDepth(100);
+            }
+            this.tallyTexts[textKey].setText(`${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${stateCounts[emotion].growing}`);
+        });
+        // Display Living section
+        let livingY = growingY + (emotions.length + 2) * lineHeight;
+        if (!this.tallyTexts['livingHeader']) {
+            this.tallyTexts['livingHeader'] = this.add.text(tallyX, livingY, 'Living', { font: '11px Arial', color: '#ffffff' });
+            this.tallyTexts['livingHeader'].setDepth(100);
         }
-        this.tallyTexts['growing'].setText(`Growing: ${growingCount}`);
-        // Living count with colored background
-        const livingColor = getDominantEmotionColor('living');
-        if (this.tallyGraphics) {
-            this.tallyGraphics.fillStyle(livingColor);
-            this.tallyGraphics.fillRect(tallyX, stateY + lineHeight, boxWidth, boxHeight);
+        this.tallyTexts['livingHeader'].setVisible(true);
+        emotions.forEach((emotion, index) => {
+            const yPos = livingY + (index + 1) * lineHeight;
+            if (this.tallyGraphics) {
+                this.tallyGraphics.fillStyle(emotionColors[emotion]);
+                this.tallyGraphics.fillRect(tallyX, yPos, boxWidth, boxHeight);
+            }
+            const textKey = `living_${emotion}`;
+            if (!this.tallyTexts[textKey]) {
+                this.tallyTexts[textKey] = this.add.text(tallyX + boxPadding, yPos + boxPadding, '', { font: '11px Arial', color: '#ffffff' });
+                this.tallyTexts[textKey].setDepth(100);
+            }
+            this.tallyTexts[textKey].setText(`${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${stateCounts[emotion].living}`);
+        });
+        // Display Dying section
+        let dyingY = livingY + (emotions.length + 2) * lineHeight;
+        if (!this.tallyTexts['dyingHeader']) {
+            this.tallyTexts['dyingHeader'] = this.add.text(tallyX, dyingY, 'Dying', { font: '11px Arial', color: '#ffffff' });
+            this.tallyTexts['dyingHeader'].setDepth(100);
         }
-        if (!this.tallyTexts['living']) {
-            this.tallyTexts['living'] = this.add.text(tallyX + 2, stateY + lineHeight, '', { font: '11px Arial', color: '#ffffff' });
-            this.tallyTexts['living'].setDepth(100);
-        }
-        this.tallyTexts['living'].setText(`Living: ${livingCount}`);
-        // Dying count with colored background
-        const dyingColor = getDominantEmotionColor('dying');
-        if (this.tallyGraphics) {
-            this.tallyGraphics.fillStyle(dyingColor);
-            this.tallyGraphics.fillRect(tallyX, stateY + lineHeight * 2, boxWidth, boxHeight);
-        }
-        if (!this.tallyTexts['dying']) {
-            this.tallyTexts['dying'] = this.add.text(tallyX + 2, stateY + lineHeight * 2, '', { font: '11px Arial', color: '#ffffff' });
-            this.tallyTexts['dying'].setDepth(100);
-        }
-        this.tallyTexts['dying'].setText(`Dying: ${dyingCount}`);
+        this.tallyTexts['dyingHeader'].setVisible(true);
+        emotions.forEach((emotion, index) => {
+            const yPos = dyingY + (index + 1) * lineHeight;
+            if (this.tallyGraphics) {
+                this.tallyGraphics.fillStyle(emotionColors[emotion]);
+                this.tallyGraphics.fillRect(tallyX, yPos, boxWidth, boxHeight);
+            }
+            const textKey = `dying_${emotion}`;
+            if (!this.tallyTexts[textKey]) {
+                this.tallyTexts[textKey] = this.add.text(tallyX + boxPadding, yPos + boxPadding, '', { font: '11px Arial', color: '#ffffff' });
+                this.tallyTexts[textKey].setDepth(100);
+            }
+            this.tallyTexts[textKey].setText(`${emotion.charAt(0).toUpperCase() + emotion.slice(1)}: ${stateCounts[emotion].dying}`);
+        });
     }
 }
