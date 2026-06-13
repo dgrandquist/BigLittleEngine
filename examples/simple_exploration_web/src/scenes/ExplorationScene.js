@@ -755,6 +755,8 @@ export default class ExplorationScene extends Phaser.Scene {
         growing.label.setDepth(20);
         if (entity.growingSquares) {
             entity.growingSquares.push(growing);
+            // Launching growth counts as "action", reset stuck timer
+            entity.stuckTimer = 0;
         }
     }
     drawGrowingSquare(growing) {
